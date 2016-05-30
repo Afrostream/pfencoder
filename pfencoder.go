@@ -216,6 +216,35 @@ func doEncoding(assetId int) {
   cmdLine = strings.Replace(cmdLine, "%UUID%", *uuid, -1)
   cmdLine = strings.Replace(cmdLine, "%BASEDIR%", path.Dir(*ac.DstFilename), -1)
   log.Printf("uuid is %s", *uuid)
+  var re *regexp.Regexp
+  re, err = regexp.Compile("%SOURCE_[0-9]+%")
+  if err != nil {
+    log.Printf("XX Cannot compile regexp %SOURCE_[0-9]+%: %s", err)
+    dbSetAssetStatus(db, assetId, "failed")
+    return
+  }
+  matches := re.FindAllString(cmdLine, -1)
+  if matches != nil {
+    for _, m := range matches {
+      str := strings.Split(m, `_`)
+      query := "SELECT filename FROM assets WHERE contentId=? AND presetId=?"
+      stmt, err := db.Prepare(query)
+      if err != nil {
+        log.Printf("XX Cannot prepare query %s: %s", query, err)
+        dbSetAssetStatus(db, assetId, "failed")
+        return
+      }
+      var filename string
+      err = stmt.QueryRow(contentId, str[1]).Scan(&filename)
+      if err != nil {
+        log.Printf("XX Cannot QueryRow %s on query %s: %s", str[1], query, err)
+        dbSetAssetStatus(db, assetId, "failed")
+        return
+      }
+      cmdLine = strings.Replace(cmdLine, m, filename, -1)
+    }
+  }
+
   query = "SELECT parameter,value FROM profilesParameters WHERE assetId=?"
   stmt, err = db.Prepare(query)
   if err != nil {
