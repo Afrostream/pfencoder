@@ -460,6 +460,11 @@ func startMonitoringLoad(encoderId int64) {
         }
         s += string(b[:bytesRead])
       }
+      err = cmd.Wait()
+      if err != nil {
+        log.Printf("XX Failed to execute %s: %s", uptimePath, err)
+        continue
+      }
       re, err := regexp.Compile("load average: *([0-9\\.]*), *")
       if err != nil {
         log.Printf("XX Can't compile regexp: %s", err)
