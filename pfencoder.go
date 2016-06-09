@@ -436,33 +436,13 @@ func registerEncoder() (id int64, err error) {
 }
 
 func startMonitoringLoad(encoderId int64) {
-  ticker := time.NewTicker(time.Second * 10)
+  ticker := time.NewTicker(time.Second * 1)
   log.Printf("-- Starting load monitoring thread")
   go func() {
     for _ = range ticker.C {
-      cmd := exec.Command(uptimePath)
-      stdout, err := cmd.StdoutPipe()
+      s, err := exec.Command(uptimePath).Output()
       if err != nil {
-        log.Printf("XX Can't get stdout pipe to cmd %s: %s", uptimePath, err)
-        continue
-      }
-      err = cmd.Start()
-      if err != nil {
-        log.Printf("XX Can't start cmd %s: %s", uptimePath, err)
-        continue
-      }
-      var s string
-      b := make([]byte, 1024)
-      for {
-        bytesRead, err := stdout.Read(b);
-        if err != nil {
-          break
-        }
-        s += string(b[:bytesRead])
-      }
-      err = cmd.Wait()
-      if err != nil {
-        log.Printf("XX Failed to execute %s: %s", uptimePath, err)
+        log.Printf("XX Can't exec cmd %s: %s", uptimePath, err)
         continue
       }
       re, err := regexp.Compile("load average: *([0-9\\.]*), *")
@@ -470,7 +450,7 @@ func startMonitoringLoad(encoderId int64) {
         log.Printf("XX Can't compile regexp: %s", err)
         continue
       }
-      matches := re.FindAllStringSubmatch(s, -1)
+      matches := re.FindAllStringSubmatch(string(s), -1)
       var load1 string
       for _, v := range matches {
         load1 = v[1]
