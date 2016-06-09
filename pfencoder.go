@@ -286,7 +286,6 @@ func doEncoding(assetId int) {
 
   cmd := exec.Command(binaryPath, cmdArgs...)
   stderr, err := cmd.StderrPipe()
-  ffmpegProcesses++
   log.Printf("-- [ %d ] Running command: %s %s", assetId, binaryPath, strings.Join(cmdArgs, " "))
   err = cmd.Start()
   if err != nil {
@@ -297,6 +296,7 @@ func doEncoding(assetId int) {
     log.Printf("-- [ %d ] Cannot start command %s %s: %s", assetId, binaryPath, strings.Join(cmdArgs, " "), err)
     return
   }
+  ffmpegProcesses++
   dbSetAssetStatus(db, assetId, "processing")
 
   fullLog := ""
