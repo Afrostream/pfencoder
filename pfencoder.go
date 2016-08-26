@@ -210,11 +210,47 @@ func doEncoding(assetId int) {
     return
   }
 
+  query = "SELECT lang,SUBSTRING_INDEX(url, '/', -1) FROM subtitles WHERE contentId=?"
+  var stmt2 *sql.Stmt
+  stmt2, err = db.Prepare(query)
+  if err != nil {
+    dbSetAssetStatus(db, assetId, "failed")
+    log.Printf("XX [ %d ] Cannot prepare query %s: %s", assetId, query, err)
+    return
+  }
+  defer stmt2.Close()
+  var rows *sql.Rows
+  rows, err = stmt.Query(*contentId)
+  if err != nil {
+    dbSetAssetStatus(db, assetId, "failed")
+    log.Printf("XX [ %d ] Cannot query %s with (%d): %s", assetId, query, contentId, err)
+    return
+  }
+  defer rows.Close()
+  subtitlesStr := ``
+  rowsEmpty := true
+  for rows.Next() {
+    var lang string
+    var vtt string
+    err = rows.Scan(&lang, &vtt)
+    if err != nil {
+      dbSetAssetStatus(db, assetId, "failed")
+      log.Printf("XX [ %d ] Cannot scan rows for query %s with (%d): %s", assetId, query, contentId, err)
+      return
+    }
+    subtitlesStr += vtt + `%` + lang + ` `
+    rowsEmpty = false
+  }
+  if rowsEmpty == false {
+    subtitlesStr = subtitlesStr[:len(subtitlesStr)-1]
+  }
+
   var cmdArgs []string
   cmdLine := strings.Replace(ac.P.CmdLine, "%SOURCE%", *ac.SrcFilename, -1)
   cmdLine = strings.Replace(cmdLine, "%DESTINATION%", *ac.DstFilename, -1)
   cmdLine = strings.Replace(cmdLine, "%UUID%", *uuid, -1)
   cmdLine = strings.Replace(cmdLine, "%BASEDIR%", path.Dir(*ac.DstFilename), -1)
+  cmdLine = strings.Replace(cmdLine, "%SUBTITLES%", subtitlesStr, -1)
   log.Printf("uuid is %s", *uuid)
   var re *regexp.Regexp
   re, err = regexp.Compile("%SOURCE_[0-9]+%")
@@ -253,7 +289,6 @@ func doEncoding(assetId int) {
     return
   }
   defer stmt.Close()
-  var rows *sql.Rows
   rows, err = stmt.Query(assetId)
   if err != nil {
     dbSetAssetStatus(db, assetId, "failed")
