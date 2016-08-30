@@ -210,15 +210,14 @@ func doEncoding(assetId int) {
     return
   }
 
-  query = "SELECT lang,SUBSTRING_INDEX(url, '/', -1) FROM subtitles WHERE contentId=?"
-  var stmt2 *sql.Stmt
-  stmt2, err = db.Prepare(query)
+  query = "SELECT lang,SUBSTRING_INDEX(url, '/', -1) AS vtt FROM subtitles WHERE contentId=?"
+  stmt, err = db.Prepare(query)
   if err != nil {
     dbSetAssetStatus(db, assetId, "failed")
     log.Printf("XX [ %d ] Cannot prepare query %s: %s", assetId, query, err)
     return
   }
-  defer stmt2.Close()
+  defer stmt.Close()
   var rows *sql.Rows
   rows, err = stmt.Query(*contentId)
   if err != nil {
@@ -229,6 +228,7 @@ func doEncoding(assetId int) {
   defer rows.Close()
   subtitlesStr := ``
   rowsEmpty := true
+  subtitles := make(map[string]string)
   for rows.Next() {
     var lang string
     var vtt string
@@ -238,12 +238,14 @@ func doEncoding(assetId int) {
       log.Printf("XX [ %d ] Cannot scan rows for query %s with (%d): %s", assetId, query, contentId, err)
       return
     }
-    subtitlesStr += vtt + `%` + lang + ` `
+    subtitles[lang] = `/space/videos/encoded/origin/vod/` + path.Base(dir) + `/` + strings.Replace(vtt, ` `, `_`, -1)
+    subtitlesStr += strings.Replace(vtt, ` `, `_`, -1) + `%` + lang + ` `
     rowsEmpty = false
   }
   if rowsEmpty == false {
     subtitlesStr = subtitlesStr[:len(subtitlesStr)-1]
   }
+
 
   var cmdArgs []string
   cmdLine := strings.Replace(ac.P.CmdLine, "%SOURCE%", *ac.SrcFilename, -1)
@@ -251,7 +253,10 @@ func doEncoding(assetId int) {
   cmdLine = strings.Replace(cmdLine, "%UUID%", *uuid, -1)
   cmdLine = strings.Replace(cmdLine, "%BASEDIR%", path.Dir(*ac.DstFilename), -1)
   cmdLine = strings.Replace(cmdLine, "%SUBTITLES%", subtitlesStr, -1)
-  log.Printf("uuid is %s", *uuid)
+  for k, l := range subtitles {
+    log.Printf("k is %s", k)
+    cmdLine = strings.Replace(cmdLine, "%SUBTITLE_" + strings.ToUpper(k) + "%", l, -1)
+  }
   var re *regexp.Regexp
   re, err = regexp.Compile("%SOURCE_[0-9]+%")
   if err != nil {
