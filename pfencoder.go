@@ -19,10 +19,11 @@ import (
 
 var ffmpegProcesses int
 
-const ffmpegPath = "/usr/bin/ffmpeg"
-const spumuxPath = "/usr/bin/spumux"
-const uptimePath = "/usr/bin/uptime"
-const dbDsn = "pfencoder:Fhd4elKd0UxCd43gVHu5@tcp(10.91.83.18:3306)/video_encoding"
+var ffmpegPath string
+var spumuxPath string
+var uptimePath string
+var dbDsn string
+var encodedBasePath string
 
 type OrderMessage struct {
   Hostname string
@@ -238,7 +239,7 @@ func doEncoding(assetId int) {
       log.Printf("XX [ %d ] Cannot scan rows for query %s with (%d): %s", assetId, query, contentId, err)
       return
     }
-    subtitles[lang] = `/space/videos/encoded/origin/vod/` + path.Base(dir) + `/` + strings.Replace(vtt, ` `, `_`, -1)
+    subtitles[lang] = encodedBasePath + `/origin/vod/` + path.Base(dir) + `/` + strings.Replace(vtt, ` `, `_`, -1)
     subtitlesStr += strings.Replace(vtt, ` `, `_`, -1) + `%` + lang + ` `
     rowsEmpty = false
   }
@@ -520,9 +521,28 @@ func startMonitoringLoad(encoderId int64) {
 func main() {
   var encoderId int64
   ffmpegProcesses = 0
+  var conn *amqp.Connection
+  var err error
 
-  conn, err := amqp.Dial("amqp://p-afsmsch-001.afrostream.tv/")
-  failOnError(err, "Failed to connect to RabbitMQ")
+  uptimePath = os.Getenv(`UPTIME_PATH`)
+  spumuxPath = os.Getenv(`SPUMUX_PATH`)
+  ffmpegPath = os.Getenv(`FFMPEG_PATH`)
+  encodedBasePath = os.Getenv(`VIDEOS_ENCODED_BASE_PATH`)
+  mysqlHost := os.Getenv(`MYSQL_HOST`)
+  mysqlUser := os.Getenv(`MYSQL_USER`)
+  mysqlPassword := os.Getenv(`MYSQL_PASSWORD`)
+  dbDsn = fmt.Sprintf("%s:%s@tcp(%s:3306)/video_encoding", mysqlUser, mysqlPassword, mysqlHost)
+  rabbitmqHost := os.Getenv(`RABBITMQ_HOST`)
+  rabbitmqUser := os.Getenv(`RABBITMQ_USER`)
+  rabbitmqPassword := os.Getenv(`RABBITMQ_PASSWORD`)
+
+  first := true
+  for first == true || err != nil {
+    conn, err = amqp.Dial(fmt.Sprintf(`amqp://%s:%s@%s/`, rabbitmqUser, rabbitmqPassword, rabbitmqHost))
+    logOnError(err, "Waiting for RabbitMQ to become ready...")
+    time.Sleep(1 * time.Second)
+    first = false
+  }
   defer conn.Close()
 
   ch, err := conn.Channel()
@@ -570,9 +590,14 @@ func main() {
   )
   failOnError(err, "Failed to register a consumer")
 
-  encoderId, err = registerEncoder()
-  if err != nil {
-    panic(err)
+  first = true
+  for first == true || err != nil {
+    encoderId, err = registerEncoder()
+    if err != nil {
+      log.Printf("Cannot register encoder in database, Waiting MySQL...")
+      time.Sleep(1 * time.Second)
+    }
+    first = false
   }
   log.Printf("-- Encoder database id is %d", encoderId)
 
