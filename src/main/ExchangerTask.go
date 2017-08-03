@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"encoding/json"
+	"fmt"
 	"github.com/streadway/amqp"
 	"log"
 	"os"
@@ -10,28 +10,44 @@ import (
 )
 
 type ExchangerTask struct {
-	rabbitmqHost string
-	rabbitmqUser string
+	/* constructor */
+	rabbitmqHost     string
+	rabbitmqPort     int
+	rabbitmqUser     string
 	rabbitmqPassword string
+	/* 'instance' variables */
+	conn *amqp.Connection 		/* connection to the RabbitMQ server */
+	ch *amqp.Channel 			/* channel in the RabbitMQ server */ 
+	q amqp.Queue					/* queue in the RabbitMQ server */
+	msgs <-chan amqp.Delivery 	/* messages to process from RabbitMQ server */
 }
 
-func (e ExchangerTask) startTask() {
-	var conn *amqp.Connection
-	 var err error
+func newExchangerTask(rabbitmqHost string, rabbitmqPort int, rabbitmqUser string, rabbitmqPassword string) ExchangerTask {
+	return (ExchangerTask{rabbitmqHost : rabbitmqHost, 
+			rabbitmqPort : rabbitmqPort, 
+			rabbitmqUser : rabbitmqUser, 
+			rabbitmqPassword : rabbitmqPassword})
+}
+
+func (e *ExchangerTask) init() {
+	log.Printf("ExchangerTask init...")
+	var err error
 	first := true
 	for first == true || err != nil {
-		conn, err = amqp.Dial(fmt.Sprintf(`amqp://%s:%s@%s/`, e.rabbitmqUser, e.rabbitmqPassword, e.rabbitmqHost))
+		uri := fmt.Sprintf(`amqp://%s:%s@%s:%d`, e.rabbitmqUser, e.rabbitmqPassword, e.rabbitmqHost, e.rabbitmqPort)
+		log.Println("connecting to RabbitMQ using uri=", uri)
+		e.conn, err = amqp.Dial(uri)
 		logOnError(err, "Waiting for RabbitMQ to become ready...")
 		time.Sleep(1 * time.Second)
 		first = false
 	}
-	defer conn.Close()
+	//defer conn.Close()
 
-	ch, err := conn.Channel()
+	e.ch, err = e.conn.Channel()
 	failOnError(err, "Failed to open a channel")
-	defer ch.Close()
+	//defer ch.Close()
 
-	err = ch.ExchangeDeclare(
+	err = e.ch.ExchangeDeclare(
 		"afsm-encoders", // name
 		"fanout",        // type
 		true,            // durable
@@ -42,7 +58,7 @@ func (e ExchangerTask) startTask() {
 	)
 	failOnError(err, "Failed to declare an exchange")
 
-	q, err := ch.QueueDeclare(
+	e.q, err = e.ch.QueueDeclare(
 		"",
 		false,
 		false,
@@ -52,17 +68,22 @@ func (e ExchangerTask) startTask() {
 	)
 	failOnError(err, "Failed to declare a queue")
 
-	err = ch.QueueBind(
-		q.Name,          // queue name
+	err = e.ch.QueueBind(
+		e.q.Name,          // queue name
 		"",              // routing key
 		"afsm-encoders", // exchange
 		false,
 		nil,
 	)
 	failOnError(err, "Failed to bind a queue")
+	log.Printf("ExchangerTask init done successfully")
+}
 
-	msgs, err := ch.Consume(
-		q.Name,
+func (e *ExchangerTask) startTask() {
+	log.Printf("ExchangerTask Thread starting...")
+	var err error
+	e.msgs, err = e.ch.Consume(
+		e.q.Name,
 		"",
 		true,
 		false,
@@ -71,14 +92,14 @@ func (e ExchangerTask) startTask() {
 		nil,
 	)
 	failOnError(err, "Failed to register a consumer")
-
-	forever := make(chan bool)
-
+	/* Here we wait messages from the RabbitMQ to be processed */
+	done := make(chan error)
 	go func() {
-		for d := range msgs {
+		log.Printf("ExchangerTask Thread started")
+		for d := range e.msgs {
 			log.Printf("Received a message: %s", d.Body)
 			var oMessage OrderMessage
-			err = json.Unmarshal([]byte(d.Body), &oMessage)
+			err := json.Unmarshal([]byte(d.Body), &oMessage)
 			hostname, err := os.Hostname()
 			if err != nil {
 				log.Fatal(err)
@@ -95,8 +116,7 @@ func (e ExchangerTask) startTask() {
 				}
 			}
 		}
+		log.Printf("ExchangerTask Thread stopped")
 	}()
-
-	log.Printf(" [*] Waiting for messages, To exit press CTRL+C")
-	<-forever
+	done <- nil
 }

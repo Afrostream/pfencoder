@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"path"
 	"strings"
@@ -8,12 +9,13 @@ import (
 	"os/exec"
 	"regexp"
 	"database/sql"
+	"net/http"
 )
 
 type TranscoderTask struct {
 }
 
-func (t TranscoderTask) doEncoding(assetId int) {
+func (t *TranscoderTask) doEncoding(assetId int) {
 	log.Printf("-- [ %d ] Encoding task received", assetId)
 	log.Printf("-- [ %d ] Get asset encoding configuration from database", assetId)
 	db := openDb()
@@ -255,12 +257,23 @@ func (t TranscoderTask) doEncoding(assetId int) {
 	} else {
 		dbSetAssetStatus(db, assetId, "ready")
 		if ac.P.Type == "ffmpeg" {
-			updateAssetsStreams(assetId)
+			t.updateAssetsStreams(assetId)
 		}
 	}
 	ffmpegProcesses--
 	dbSetFFmpegLog(db, assetId, fullLog)
 	log.Printf("-- [ %d ] FFmpeg execution success", assetId)
+
+	return
+}
+
+func (t *TranscoderTask) updateAssetsStreams(assetId int) {
+	url := fmt.Sprintf("http://p-afsmsch-001.afrostream.tv:4000/api/assetsStreams/%d", assetId)
+	_, err := http.Post(url, "application/json", strings.NewReader("{}"))
+	if err != nil {
+		log.Printf("XX Cannot update assetsStreams with url %s: %s", url, err)
+		return
+	}
 
 	return
 }

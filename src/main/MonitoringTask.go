@@ -10,10 +10,11 @@ import (
 type MonitoringTask struct {
 }
 
-func (m MonitoringTask) startMonitoringLoad(encoderId int64) {
-	ticker := time.NewTicker(time.Second * 1)
-	log.Printf("-- Starting load monitoring thread")
+func (m *MonitoringTask) startMonitoringLoad(encoderId int64) {
+	log.Printf("MonitoringTask Thread starting...")
+	ticker := time.NewTicker(time.Second * 5)
 	go func() {
+		log.Printf("MonitoringTask Thread started")
 		for _ = range ticker.C {
 			s, err := exec.Command(uptimePath).Output()
 			if err != nil {
@@ -49,5 +50,6 @@ func (m MonitoringTask) startMonitoringLoad(encoderId int64) {
 			stmt.Close()
 			db.Close()
 		}
+		log.Printf("MonitoringTask Thread stopped")
 	}()
 }

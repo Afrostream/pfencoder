@@ -5,10 +5,10 @@ import (
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"log"
-	"net/http"
 	"os"
-	"strings"
 	"time"
+	"runtime"
+	"strconv"
 )
 
 var ffmpegProcesses int
@@ -31,17 +31,6 @@ func logOnError(err error, format string, v ...interface{}) {
 	if err != nil {
 		log.Printf(format, v, err)
 	}
-}
-
-func updateAssetsStreams(assetId int) {
-	url := fmt.Sprintf("http://p-afsmsch-001.afrostream.tv:4000/api/assetsStreams/%d", assetId)
-	_, err := http.Post(url, "application/json", strings.NewReader("{}"))
-	if err != nil {
-		log.Printf("XX Cannot update assetsStreams with url %s: %s", url, err)
-		return
-	}
-
-	return
 }
 
 func registerEncoder() (id int64, err error) {
@@ -103,11 +92,18 @@ func main() {
 	mysqlHost := os.Getenv(`MYSQL_HOST`)
 	mysqlUser := os.Getenv(`MYSQL_USER`)
 	mysqlPassword := os.Getenv(`MYSQL_PASSWORD`)
-	dbDsn = fmt.Sprintf("%s:%s@tcp(%s:3306)/video_encoding", mysqlUser, mysqlPassword, mysqlHost)
+	mySqlPort := 3306
+	if os.Getenv(`MYSQL_PORT`) != ""  {
+		mySqlPort,_ = strconv.Atoi(os.Getenv(`MYSQL_PORT`))
+	}
+	dbDsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/video_encoding", mysqlUser, mysqlPassword, mysqlHost, mySqlPort)
 	rabbitmqHost := os.Getenv(`RABBITMQ_HOST`)
 	rabbitmqUser := os.Getenv(`RABBITMQ_USER`)
 	rabbitmqPassword := os.Getenv(`RABBITMQ_PASSWORD`)
-
+	rabbitmqPort := 5672
+	if os.Getenv(`RABBITMQ_PORT`) != ""  {
+		rabbitmqPort,_ = strconv.Atoi(os.Getenv(`RABBITMQ_PORT`))
+	}
 	first := true
 	for first == true || err != nil {
 		encoderId, err = registerEncoder()
@@ -122,7 +118,23 @@ func main() {
 	monitoringTask := MonitoringTask{}
 	monitoringTask.startMonitoringLoad(encoderId)
 
-	exchangerTask := ExchangerTask{rabbitmqHost, rabbitmqUser, rabbitmqPassword}
+	exchangerTask := newExchangerTask(rabbitmqHost, rabbitmqPort, rabbitmqUser, rabbitmqPassword)
+	exchangerTask.init()
 	exchangerTask.startTask()
-	log.Println("pfencoder started")
+	log.Println("pfencoder started, To exit press CTRL+C")
+	runtime.Goexit()
+	/* NCO : ? Goexit or forever : What is the best.. ? */
+	/*done := make(chan bool)
+	go forever()
+	log.Println("pfencoder started, To exit press CTRL+C")
+	<-done // Block forever
+	*/
+	log.Println("pfencoder stopped")
 }
+
+/*func forever() {
+	for {
+		fmt.Printf("%v+\n", time.Now())
+		time.Sleep(time.Second)
+	}
+}*/
