@@ -13,12 +13,14 @@ import (
 )
 
 type TranscoderTask struct {
+	/* constructor */
+	/**/	
 }
 
 func (t *TranscoderTask) doEncoding(assetId int) {
 	log.Printf("-- [ %d ] Encoding task received", assetId)
 	log.Printf("-- [ %d ] Get asset encoding configuration from database", assetId)
-	db := openDb()
+	db,_ := openDb()
 	defer db.Close()
 	query := "SELECT c.contentId,c.uuid,c.filename,a2.filename,a.filename,p.presetId,p.profileId,p.type,p.cmdLine,p.createdAt,p.updatedAt FROM assets AS a LEFT JOIN presets AS p ON a.presetId=p.presetId LEFT JOIN assets AS a2 ON a.assetIdDependance=a2.assetId LEFT JOIN contents AS c ON c.contentId=a.contentId WHERE a.assetId=?"
 	stmt, err := db.Prepare(query)

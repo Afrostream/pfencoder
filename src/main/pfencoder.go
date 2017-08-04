@@ -6,18 +6,24 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"log"
 	"os"
-	"time"
 	"runtime"
 	"strconv"
+	"time"
 )
+
+/* GLOBALS --> */
 
 var ffmpegProcesses int
 
 var ffmpegPath string
 var spumuxPath string
 var uptimePath string
-var dbDsn string
+
 var encodedBasePath string
+
+var dbDsn string
+
+/* <-- GLOBALS */
 
 func failOnError(err error, msg string) {
 	if err != nil {
@@ -40,7 +46,7 @@ func registerEncoder() (id int64, err error) {
 		panic(err)
 	}
 	log.Printf("-- Register encoder '%s' for processing encoding tasks", hostname)
-	db := openDb()
+	db, _ := openDb()
 	defer db.Close()
 
 	query := "SELECT encoderId FROM encoders WHERE hostname=?"
@@ -80,48 +86,23 @@ func registerEncoder() (id int64, err error) {
 }
 
 func main() {
-	log.Println("pfencoder starting...")
-	var encoderId int64
-	ffmpegProcesses = 0
-	var err error
+	log.Println("-- pfencoder starting...")
+	var monitoringTask MonitoringTask
+	var exchangerTask ExchangerTask
 
-	uptimePath = os.Getenv(`UPTIME_PATH`)
-	spumuxPath = os.Getenv(`SPUMUX_PATH`)
-	ffmpegPath = os.Getenv(`FFMPEG_PATH`)
-	encodedBasePath = os.Getenv(`VIDEOS_ENCODED_BASE_PATH`)
-	mysqlHost := os.Getenv(`MYSQL_HOST`)
-	mysqlUser := os.Getenv(`MYSQL_USER`)
-	mysqlPassword := os.Getenv(`MYSQL_PASSWORD`)
-	mySqlPort := 3306
-	if os.Getenv(`MYSQL_PORT`) != ""  {
-		mySqlPort,_ = strconv.Atoi(os.Getenv(`MYSQL_PORT`))
-	}
-	dbDsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/video_encoding", mysqlUser, mysqlPassword, mysqlHost, mySqlPort)
-	rabbitmqHost := os.Getenv(`RABBITMQ_HOST`)
-	rabbitmqUser := os.Getenv(`RABBITMQ_USER`)
-	rabbitmqPassword := os.Getenv(`RABBITMQ_PASSWORD`)
-	rabbitmqPort := 5672
-	if os.Getenv(`RABBITMQ_PORT`) != ""  {
-		rabbitmqPort,_ = strconv.Atoi(os.Getenv(`RABBITMQ_PORT`))
-	}
-	first := true
-	for first == true || err != nil {
-		encoderId, err = registerEncoder()
-		if err != nil {
-			log.Printf("Cannot register encoder in database, Waiting MySQL...")
-			time.Sleep(1 * time.Second)
-		}
-		first = false
-	}
-	log.Printf("-- Encoder database id is %d", encoderId)
+	initGlobals()
 
-	monitoringTask := MonitoringTask{}
-	monitoringTask.startMonitoringLoad(encoderId)
+	initChecks()
 
-	exchangerTask := newExchangerTask(rabbitmqHost, rabbitmqPort, rabbitmqUser, rabbitmqPassword)
+	monitoringTask = createMonitoringTask()
+	monitoringTask.init()
+	monitoringTask.start()
+
+	exchangerTask = createExchangerTask()
 	exchangerTask.init()
-	exchangerTask.startTask()
-	log.Println("pfencoder started, To exit press CTRL+C")
+	exchangerTask.start()
+
+	log.Println("-- pfencoder started, To exit press CTRL+C")
 	runtime.Goexit()
 	/* NCO : ? Goexit or forever : What is the best.. ? */
 	/*done := make(chan bool)
@@ -129,7 +110,75 @@ func main() {
 	log.Println("pfencoder started, To exit press CTRL+C")
 	<-done // Block forever
 	*/
-	log.Println("pfencoder stopped")
+	log.Println("-- pfencoder stopped")
+}
+
+func initGlobals() {
+	log.Println("-- initGlobals starting...")
+	ffmpegProcesses = 0
+
+	ffmpegPath = os.Getenv(`FFMPEG_PATH`)
+	spumuxPath = os.Getenv(`SPUMUX_PATH`)
+	uptimePath = os.Getenv(`UPTIME_PATH`)
+
+	encodedBasePath = os.Getenv(`VIDEOS_ENCODED_BASE_PATH`)
+
+	mysqlHost := os.Getenv(`MYSQL_HOST`)
+	mysqlUser := os.Getenv(`MYSQL_USER`)
+	mysqlPassword := os.Getenv(`MYSQL_PASSWORD`)
+	mySqlPort := 3306
+	if os.Getenv(`MYSQL_PORT`) != "" {
+		mySqlPort, _ = strconv.Atoi(os.Getenv(`MYSQL_PORT`))
+	}
+	dbDsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/video_encoding", mysqlUser, mysqlPassword, mysqlHost, mySqlPort)
+	log.Println("-- initGlobals done successfully")
+}
+
+func initChecks() {
+	log.Println("-- initChecks starting...")
+	//binaries are functional
+	//database is up
+	var db *sql.DB
+	var err error
+	first := true
+	for first == true || err != nil {
+		db, err = openDb()
+		defer db.Close()
+		if err != nil {
+			log.Printf("Cannot connect to DB, Waiting for MySQL...")
+			time.Sleep(1 * time.Second)
+		}
+		first = false
+	}
+	log.Println("-- initChecks done successfully")
+}
+
+func createMonitoringTask() MonitoringTask {
+	log.Println("-- createMonitoringTask starting...")
+	encoderId, err := registerEncoder()
+	if err != nil {
+		msg := "Cannot register encoder in database"
+		log.Printf(msg)
+		panic(msg)
+	}
+	log.Printf("-- Encoder database id is %d", encoderId)
+	monitoringTask := newMonitoringTask(encoderId)
+	log.Println("-- createMonitoringTask done successfully")
+	return monitoringTask
+}
+
+func createExchangerTask() ExchangerTask {
+	log.Println("-- createExchangerTask starting...")
+	rabbitmqHost := os.Getenv(`RABBITMQ_HOST`)
+	rabbitmqUser := os.Getenv(`RABBITMQ_USER`)
+	rabbitmqPassword := os.Getenv(`RABBITMQ_PASSWORD`)
+	rabbitmqPort := 5672
+	if os.Getenv(`RABBITMQ_PORT`) != "" {
+		rabbitmqPort, _ = strconv.Atoi(os.Getenv(`RABBITMQ_PORT`))
+	}
+	exchangerTask := newExchangerTask(rabbitmqHost, rabbitmqPort, rabbitmqUser, rabbitmqPassword)
+	log.Println("-- createExchangerTask done successfully")
+	return exchangerTask
 }
 
 /*func forever() {

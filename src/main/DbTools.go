@@ -7,12 +7,15 @@ import (
 	"errors"
 )
 
-func openDb() (db *sql.DB) {
-	db, err := sql.Open("mysql", dbDsn)
-	logOnError(err, "Cannot open database %s", dbDsn)
+func openDb() (db *sql.DB, err error) {
+	db, err = sql.Open("mysql", dbDsn)
+	if err != nil {
+		logOnError(err, "Cannot open database %s", dbDsn)
+	}
 	err = db.Ping()
-	logOnError(err, "Cannot ping database %s", dbDsn)
-
+	if err != nil {
+		logOnError(err, "Cannot ping database %s", dbDsn)
+	}
 	return
 }
 
