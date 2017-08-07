@@ -16,11 +16,8 @@ type ExchangerTask struct {
 	rabbitmqUser     string
 	rabbitmqPassword string
 	/* 'instance' variables */
+	amqpUri     string
 	initialized bool
-	conn        *amqp.Connection     /* connection to the RabbitMQ server */
-	ch          *amqp.Channel        /* channel in the RabbitMQ server */
-	q           amqp.Queue           /* queue in the RabbitMQ server */
-	msgs        <-chan amqp.Delivery /* messages to process from RabbitMQ server */
 }
 
 func newExchangerTask(rabbitmqHost string, rabbitmqPort int, rabbitmqUser string, rabbitmqPassword string) ExchangerTask {
@@ -31,52 +28,8 @@ func newExchangerTask(rabbitmqHost string, rabbitmqPort int, rabbitmqUser string
 }
 
 func (e *ExchangerTask) init() {
-	log.Printf("-- ExchangerTask init...")
-	var err error
-	first := true
-	for first == true || err != nil {
-		uri := fmt.Sprintf(`amqp://%s:%s@%s:%d`, e.rabbitmqUser, e.rabbitmqPassword, e.rabbitmqHost, e.rabbitmqPort)
-		log.Println("connecting to RabbitMQ using uri=", uri)
-		e.conn, err = amqp.Dial(uri)
-		logOnError(err, "Waiting for RabbitMQ to become ready...")
-		time.Sleep(1 * time.Second)
-		first = false
-	}
-	//defer conn.Close()
-
-	e.ch, err = e.conn.Channel()
-	failOnError(err, "Failed to open a channel")
-	//defer ch.Close()
-
-	err = e.ch.ExchangeDeclare(
-		"afsm-encoders", // name
-		"fanout",        // type
-		true,            // durable
-		false,           // auto-deleted
-		false,           // internal
-		false,           // no-wait
-		nil,             // arguments
-	)
-	failOnError(err, "Failed to declare an exchange")
-
-	e.q, err = e.ch.QueueDeclare(
-		"",
-		false,
-		false,
-		true,
-		false,
-		nil,
-	)
-	failOnError(err, "Failed to declare a queue")
-
-	err = e.ch.QueueBind(
-		e.q.Name,        // queue name
-		"",              // routing key
-		"afsm-encoders", // exchange
-		false,
-		nil,
-	)
-	failOnError(err, "Failed to bind a queue")
+	log.Printf("-- ExchangerTask init starting...")
+	e.amqpUri = fmt.Sprintf(`amqp://%s:%s@%s:%d`, e.rabbitmqUser, e.rabbitmqPassword, e.rabbitmqHost, e.rabbitmqPort)
 	e.initialized = true
 	log.Printf("-- ExchangerTask init done successfully")
 }
@@ -87,42 +40,117 @@ func (e *ExchangerTask) start() {
 		return
 	}
 	log.Printf("-- ExchangerTask Thread starting...")
-	var err error
-	e.msgs, err = e.ch.Consume(
-		e.q.Name,
-		"",
-		true,
-		false,
-		false,
-		false,
-		nil,
-	)
-	failOnError(err, "Failed to register a consumer")
-	/* Here we wait messages from the RabbitMQ to be processed */
-	done := make(chan error)
-	go func() {
-		log.Printf("-- ExchangerTask Thread started")
-		for d := range e.msgs {
-			log.Printf("-- Received a message: %s", d.Body)
-			var oMessage OrderMessage
-			err := json.Unmarshal([]byte(d.Body), &oMessage)
-			hostname, err := os.Hostname()
-			if err != nil {
-				log.Fatal(err)
-			} else {
-				if oMessage.Hostname == hostname {
-					if ffmpegProcesses < 4 {
-						log.Printf("-- Start running ffmpeg process")
-						transcoderTask := TranscoderTask{}
-						go transcoderTask.doEncoding(oMessage.AssetId)
-						log.Printf("-- Func doEncoding() thread created")
-					} else {
-						log.Printf("Cannot start one more ffmpeg process (encoding queue full)")
+	for { //reconnection loop
+		log.Printf("-- (Re)Connection to RabbitMQ...")
+		done := false
+		/* setup */
+		conn := e.connectToRabbitMQ()
+		defer conn.Close()
+		notify := conn.NotifyClose(make(chan *amqp.Error))
+		ch, err := conn.Channel()
+		logOnError(err, "Failed to open a channel")
+		var msgs <-chan amqp.Delivery
+		if err != nil {
+			defer ch.Close()
+		}
+		if err != nil {
+			err = ch.ExchangeDeclare(
+				"afsm-encoders", // name
+				"fanout",        // type
+				true,            // durable
+				false,           // auto-deleted
+				false,           // internal
+				false,           // no-wait
+				nil,             // arguments
+			)
+			logOnError(err, "Failed to declare an exchange")
+		}
+		var q amqp.Queue
+		if err != nil {
+			q, err = ch.QueueDeclare(
+				"",
+				false,
+				false,
+				true,
+				false,
+				nil,
+			)
+			logOnError(err, "Failed to declare a queue")
+		}
+		if err != nil {
+			err = ch.QueueBind(
+				q.Name,          // queue name
+				"",              // routing key
+				"afsm-encoders", // exchange
+				false,
+				nil,
+			)
+			logOnError(err, "Failed to bind a queue")
+		}
+		if err != nil {
+			msgs, err = ch.Consume(
+				q.Name,
+				"",
+				true,
+				false,
+				false,
+				false,
+				nil,
+			)
+			logOnError(err, "Failed to register a consumer")
+		}
+		if err == nil {
+			done = true
+		}
+		if done {
+			log.Printf("-- (Re)Connection to RabbitMQ done successfully")
+		} else {
+			log.Printf("(Re)Connection to RabbitMQ failed")
+		}
+		/* wait for messages */
+	MSGSLOOP:
+		for {
+			select {
+			case err := <-notify:
+				//work with error
+				logOnError(err, "Lost connection to the RabbitMQ, will retry connection...")
+				break MSGSLOOP //reconnect
+			case d := <-msgs:
+				//work with message
+				log.Printf("-- Receiving a message...")
+				log.Printf("-- Received a message: %s", d.Body)
+				var oMessage OrderMessage
+				err := json.Unmarshal([]byte(d.Body), &oMessage)
+				hostname, err := os.Hostname()
+				if err != nil {
+					log.Fatal(err)
+				} else {
+					if oMessage.Hostname == hostname {
+						if ffmpegProcesses < 4 {
+							log.Printf("-- Start running ffmpeg process")
+							transcoderTask := TranscoderTask{}
+							go transcoderTask.doEncoding(oMessage.AssetId)
+							log.Printf("-- Func doEncoding() thread created")
+						} else {
+							log.Printf("Cannot start one more ffmpeg process (encoding queue full)")
+						}
 					}
 				}
+				log.Printf("-- Receiving a message done successfully")
 			}
 		}
-		log.Printf("-- ExchangerTask Thread stopped")
-	}()
-	done <- nil
+	}
+	log.Printf("ExchangerTask Thread stopped")
+}
+
+func (e *ExchangerTask) connectToRabbitMQ() *amqp.Connection {
+	for {
+		conn, err := amqp.Dial(e.amqpUri)
+		if err == nil {
+			return conn
+		}
+		logOnError(err, "Failed to connect to the RabbitMQ, retrying...")
+		time.Sleep(3 * time.Second)
+	}
+
 }
