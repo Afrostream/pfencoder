@@ -1,4 +1,4 @@
-package main
+package tasks
 
 import (
 	"encoding/json"
@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"time"
+	"main/tools"
 )
 
 type ExchangerTask struct {
@@ -20,21 +21,21 @@ type ExchangerTask struct {
 	initialized bool
 }
 
-func newExchangerTask(rabbitmqHost string, rabbitmqPort int, rabbitmqUser string, rabbitmqPassword string) ExchangerTask {
+func NewExchangerTask(rabbitmqHost string, rabbitmqPort int, rabbitmqUser string, rabbitmqPassword string) ExchangerTask {
 	return (ExchangerTask{rabbitmqHost: rabbitmqHost,
 		rabbitmqPort:     rabbitmqPort,
 		rabbitmqUser:     rabbitmqUser,
 		rabbitmqPassword: rabbitmqPassword})
 }
 
-func (e *ExchangerTask) init() {
+func (e *ExchangerTask) Init() {
 	log.Printf("-- ExchangerTask init starting...")
 	e.amqpUri = fmt.Sprintf(`amqp://%s:%s@%s:%d`, e.rabbitmqUser, e.rabbitmqPassword, e.rabbitmqHost, e.rabbitmqPort)
 	e.initialized = true
 	log.Printf("-- ExchangerTask init done successfully")
 }
 
-func (e *ExchangerTask) start() {
+func (e *ExchangerTask) Start() {
 	if e.initialized == false {
 		log.Printf("ExchangerTask not initialized, Thread cannot start...")
 		return
@@ -48,7 +49,7 @@ func (e *ExchangerTask) start() {
 		defer conn.Close()
 		notify := conn.NotifyClose(make(chan *amqp.Error))
 		ch, err := conn.Channel()
-		logOnError(err, "Failed to open a channel")
+		tools.LogOnError(err, "Failed to open a channel")
 		var msgs <-chan amqp.Delivery
 		if err != nil {
 			defer ch.Close()
@@ -63,7 +64,7 @@ func (e *ExchangerTask) start() {
 				false,           // no-wait
 				nil,             // arguments
 			)
-			logOnError(err, "Failed to declare an exchange")
+			tools.LogOnError(err, "Failed to declare an exchange")
 		}
 		var q amqp.Queue
 		if err != nil {
@@ -75,7 +76,7 @@ func (e *ExchangerTask) start() {
 				false,
 				nil,
 			)
-			logOnError(err, "Failed to declare a queue")
+			tools.LogOnError(err, "Failed to declare a queue")
 		}
 		if err != nil {
 			err = ch.QueueBind(
@@ -85,7 +86,7 @@ func (e *ExchangerTask) start() {
 				false,
 				nil,
 			)
-			logOnError(err, "Failed to bind a queue")
+			tools.LogOnError(err, "Failed to bind a queue")
 		}
 		if err != nil {
 			msgs, err = ch.Consume(
@@ -97,7 +98,7 @@ func (e *ExchangerTask) start() {
 				false,
 				nil,
 			)
-			logOnError(err, "Failed to register a consumer")
+			tools.LogOnError(err, "Failed to register a consumer")
 		}
 		if err == nil {
 			done = true
@@ -113,7 +114,7 @@ func (e *ExchangerTask) start() {
 			select {
 			case err := <-notify:
 				//work with error
-				logOnError(err, "Lost connection to the RabbitMQ, will retry connection...")
+				tools.LogOnError(err, "Lost connection to the RabbitMQ, will retry connection...")
 				break MSGSLOOP //reconnect
 			case d := <-msgs:
 				//work with message
@@ -149,7 +150,7 @@ func (e *ExchangerTask) connectToRabbitMQ() *amqp.Connection {
 		if err == nil {
 			return conn
 		}
-		logOnError(err, "Failed to connect to the RabbitMQ, retrying...")
+		tools.LogOnError(err, "Failed to connect to the RabbitMQ, retrying...")
 		time.Sleep(3 * time.Second)
 	}
 

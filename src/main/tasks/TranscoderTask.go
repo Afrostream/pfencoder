@@ -1,4 +1,4 @@
-package main
+package tasks
 
 import (
 	"fmt"
@@ -10,7 +10,15 @@ import (
 	"regexp"
 	"database/sql"
 	"net/http"
+	"main/database"
 )
+
+var ffmpegProcesses = 0
+
+var ffmpegPath = os.Getenv(`FFMPEG_PATH`)
+var spumuxPath = os.Getenv(`SPUMUX_PATH`)
+
+var encodedBasePath = os.Getenv(`VIDEOS_ENCODED_BASE_PATH`)
 
 type TranscoderTask struct {
 	/* constructor */
@@ -20,23 +28,23 @@ type TranscoderTask struct {
 func (t *TranscoderTask) doEncoding(assetId int) {
 	log.Printf("-- [ %d ] Encoding task received", assetId)
 	log.Printf("-- [ %d ] Get asset encoding configuration from database", assetId)
-	db,_ := openDb()
+	db,_ := database.OpenDb()
 	defer db.Close()
 	query := "SELECT c.contentId,c.uuid,c.filename,a2.filename,a.filename,p.presetId,p.profileId,p.type,p.cmdLine,p.createdAt,p.updatedAt FROM assets AS a LEFT JOIN presets AS p ON a.presetId=p.presetId LEFT JOIN assets AS a2 ON a.assetIdDependance=a2.assetId LEFT JOIN contents AS c ON c.contentId=a.contentId WHERE a.assetId=?"
 	stmt, err := db.Prepare(query)
 	if err != nil {
-		dbSetAssetStatus(db, assetId, "failed")
+		database.DbSetAssetStatus(db, assetId, "failed")
 		log.Printf("XX [ %d ] Cannot prepare query %s: %s", assetId, query, err)
 		return
 	}
 	defer stmt.Close()
-	var ac AssetConfiguration
+	var ac database.AssetConfiguration
 	var contentId *int
 	var uuid *string
 	var contentFilename *string
-	err = stmt.QueryRow(assetId).Scan(&contentId, &uuid, &contentFilename, &ac.SrcFilename, &ac.DstFilename, &ac.P.Id, &ac.P.ProfileId, &ac.P.Type, &ac.P.CmdLine, &ac.P.CreatedAt, &ac.P.UpdatedAt)
+	err = stmt.QueryRow(assetId).Scan(&contentId, &uuid, &contentFilename, &ac.SrcFilename, &ac.DstFilename, &ac.P.ID, &ac.P.ProfileId, &ac.P.Type, &ac.P.CmdLine, &ac.P.CreatedAt, &ac.P.UpdatedAt)
 	if err != nil {
-		dbSetAssetStatus(db, assetId, "failed")
+		database.DbSetAssetStatus(db, assetId, "failed")
 		log.Printf("XX [ %d ] Cannot query %s with assetId=%d and scan results: %s", assetId, query, assetId, err)
 		return
 	}
@@ -47,14 +55,14 @@ func (t *TranscoderTask) doEncoding(assetId int) {
 	err = os.MkdirAll(dir, 0755)
 	if err != nil {
 		log.Printf("XX Cannot create directory %s: %s", dir, err)
-		dbSetAssetStatus(db, assetId, "failed")
+		database.DbSetAssetStatus(db, assetId, "failed")
 		return
 	}
 
 	query = "SELECT lang,SUBSTRING_INDEX(url, '/', -1) AS vtt FROM subtitles WHERE contentId=?"
 	stmt, err = db.Prepare(query)
 	if err != nil {
-		dbSetAssetStatus(db, assetId, "failed")
+		database.DbSetAssetStatus(db, assetId, "failed")
 		log.Printf("XX [ %d ] Cannot prepare query %s: %s", assetId, query, err)
 		return
 	}
@@ -62,7 +70,7 @@ func (t *TranscoderTask) doEncoding(assetId int) {
 	var rows *sql.Rows
 	rows, err = stmt.Query(*contentId)
 	if err != nil {
-		dbSetAssetStatus(db, assetId, "failed")
+		database.DbSetAssetStatus(db, assetId, "failed")
 		log.Printf("XX [ %d ] Cannot query %s with (%d): %s", assetId, query, contentId, err)
 		return
 	}
@@ -75,7 +83,7 @@ func (t *TranscoderTask) doEncoding(assetId int) {
 		var vtt string
 		err = rows.Scan(&lang, &vtt)
 		if err != nil {
-			dbSetAssetStatus(db, assetId, "failed")
+			database.DbSetAssetStatus(db, assetId, "failed")
 			log.Printf("XX [ %d ] Cannot scan rows for query %s with (%d): %s", assetId, query, contentId, err)
 			return
 		}
@@ -101,7 +109,7 @@ func (t *TranscoderTask) doEncoding(assetId int) {
 	re, err = regexp.Compile("%SOURCE_[0-9]+%")
 	if err != nil {
 		log.Printf("XX Cannot compile regexp %SOURCE_[0-9]+%: %s", err)
-		dbSetAssetStatus(db, assetId, "failed")
+		database.DbSetAssetStatus(db, assetId, "failed")
 		return
 	}
 	matches := re.FindAllString(cmdLine, -1)
@@ -112,14 +120,14 @@ func (t *TranscoderTask) doEncoding(assetId int) {
 			stmt, err := db.Prepare(query)
 			if err != nil {
 				log.Printf("XX Cannot prepare query %s: %s", query, err)
-				dbSetAssetStatus(db, assetId, "failed")
+				database.DbSetAssetStatus(db, assetId, "failed")
 				return
 			}
 			var filename string
 			err = stmt.QueryRow(contentId, str[1]).Scan(&filename)
 			if err != nil {
 				log.Printf("XX Cannot QueryRow %s on query %s: %s", str[1], query, err)
-				dbSetAssetStatus(db, assetId, "failed")
+				database.DbSetAssetStatus(db, assetId, "failed")
 				return
 			}
 			cmdLine = strings.Replace(cmdLine, m, filename, -1)
@@ -129,14 +137,14 @@ func (t *TranscoderTask) doEncoding(assetId int) {
 	query = "SELECT parameter,value FROM profilesParameters WHERE assetId=?"
 	stmt, err = db.Prepare(query)
 	if err != nil {
-		dbSetAssetStatus(db, assetId, "failed")
+		database.DbSetAssetStatus(db, assetId, "failed")
 		log.Printf("XX [ %d ] Cannot prepare query %s: %s", query, err)
 		return
 	}
 	defer stmt.Close()
 	rows, err = stmt.Query(assetId)
 	if err != nil {
-		dbSetAssetStatus(db, assetId, "failed")
+		database.DbSetAssetStatus(db, assetId, "failed")
 		log.Printf("XX [ %d ] Cannot query %s with (%d): %s", query, assetId, err)
 		return
 	}
@@ -146,7 +154,7 @@ func (t *TranscoderTask) doEncoding(assetId int) {
 		var value string
 		err = rows.Scan(&parameter, &value)
 		if err != nil {
-			dbSetAssetStatus(db, assetId, "failed")
+			database.DbSetAssetStatus(db, assetId, "failed")
 			log.Printf("XX [ %d ] Cannot scan result for query %s: %s", query, err)
 			return
 		}
@@ -169,15 +177,15 @@ func (t *TranscoderTask) doEncoding(assetId int) {
 	log.Printf("-- [ %d ] Running command: %s %s", assetId, binaryPath, strings.Join(cmdArgs, " "))
 	err = cmd.Start()
 	if err != nil {
-		dbSetAssetStatus(db, assetId, "failed")
+		database.DbSetAssetStatus(db, assetId, "failed")
 		if contentId != nil {
-			dbSetContentStatus(db, *contentId, "failed")
+			database.DbSetContentStatus(db, *contentId, "failed")
 		}
 		log.Printf("-- [ %d ] Cannot start command %s %s: %s", assetId, binaryPath, strings.Join(cmdArgs, " "), err)
 		return
 	}
 	ffmpegProcesses++
-	dbSetAssetStatus(db, assetId, "processing")
+	database.DbSetAssetStatus(db, assetId, "processing")
 
 	fullLog := ""
 	switch ac.P.Type {
@@ -199,8 +207,8 @@ func (t *TranscoderTask) doEncoding(assetId int) {
 
 		// If FFMpeg exit with error
 		if ffmpegStartOK == false {
-			dbSetAssetStatus(db, assetId, "failed")
-			dbSetFFmpegLog(db, assetId, s)
+			database.DbSetAssetStatus(db, assetId, "failed")
+			database.DbSetFFmpegLog(db, assetId, s)
 			log.Printf("XX [ %d ] FFMpeg execution error, please consult logs in database table 'logs'", assetId)
 			cmd.Wait()
 			ffmpegProcesses--
@@ -225,14 +233,14 @@ func (t *TranscoderTask) doEncoding(assetId int) {
 				s = str[1]
 				matches := re.FindAllStringSubmatch(str[0], -1)
 				for _, v := range matches {
-					var fp FFMpegProgression
+					var fp database.FFMpegProgress
 					fp.Frame = v[1]
 					fp.Fps = v[2]
 					fp.Q = v[3]
 					fp.Size = v[4]
 					fp.Elapsed = strings.Split(v[5], ".")[0]
 					fp.Bitrate = v[6]
-					dbSetFFmpegProgression(db, assetId, fp)
+					database.DbSetFFmpegProgression(db, assetId, fp)
 				}
 			}
 			if err != nil {
@@ -254,16 +262,16 @@ func (t *TranscoderTask) doEncoding(assetId int) {
 	}
 	err = cmd.Wait()
 	if err != nil {
-		dbSetAssetStatus(db, assetId, "failed")
+		database.DbSetAssetStatus(db, assetId, "failed")
 		log.Printf("XX [ %d ] FFMpeg execution error, please consult logs in database table 'logs'", assetId)
 	} else {
-		dbSetAssetStatus(db, assetId, "ready")
+		database.DbSetAssetStatus(db, assetId, "ready")
 		if ac.P.Type == "ffmpeg" {
 			t.updateAssetsStreams(assetId)
 		}
 	}
 	ffmpegProcesses--
-	dbSetFFmpegLog(db, assetId, fullLog)
+	database.DbSetFFmpegLog(db, assetId, fullLog)
 	log.Printf("-- [ %d ] FFmpeg execution success", assetId)
 
 	return
@@ -278,4 +286,8 @@ func (t *TranscoderTask) updateAssetsStreams(assetId int) {
 	}
 
 	return
+}
+
+func (t *TranscoderTask) startEncoding(assetId int) {
+	
 }

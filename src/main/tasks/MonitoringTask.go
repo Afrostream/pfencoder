@@ -1,28 +1,33 @@
-package main
+package tasks
 
 import (
 	"log"
 	"os/exec"
 	"regexp"
 	"time"
+	"os"
+	"main/database"
+	//"main/tools"
 )
 
 type MonitoringTask struct {
 	/* constructor */
-	instanceId int64
+	instanceId uint
 	/**/
 	initialized bool
+	uptimePath string
 }
 
-func newMonitoringTask(instanceId int64) MonitoringTask {
+func NewMonitoringTask(instanceId uint) MonitoringTask {
 	return (MonitoringTask{instanceId: instanceId})
 }
 
-func (m *MonitoringTask) init() {
+func (m *MonitoringTask) Init() {
+	m.uptimePath = os.Getenv(`UPTIME_PATH`)
 	m.initialized = true
 }
 
-func (m *MonitoringTask) start() {
+func (m *MonitoringTask) Start() {
 	if m.initialized == false {
 		log.Printf("MonitoringTask not initialized, Thread cannot start...")
 		return
@@ -32,9 +37,9 @@ func (m *MonitoringTask) start() {
 	go func() {
 		log.Printf("-- MonitoringTask Thread started")
 		for _ = range ticker.C {
-			s, err := exec.Command(uptimePath).Output()
+			s, err := exec.Command(m.uptimePath).Output()
 			if err != nil {
-				log.Printf("XX Can't exec cmd %s: %s", uptimePath, err)
+				log.Printf("XX Can't exec cmd %s: %s", m.uptimePath, err)
 				continue
 			}
 			re, err := regexp.Compile("load average: *([0-9\\.]*), *")
@@ -47,7 +52,7 @@ func (m *MonitoringTask) start() {
 			for _, v := range matches {
 				load1 = v[1]
 			}
-			db, _ := openDb()
+			db, _ := database.OpenDb()
 			query := "UPDATE encoders SET load1=?,activeTasks=? WHERE encoderId=?"
 			stmt, err := db.Prepare(query)
 			if err != nil {

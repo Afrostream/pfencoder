@@ -1,25 +1,38 @@
-package main
+package database
 
 import (
-	"fmt"
-	"log"
 	"database/sql"
 	"errors"
+	"fmt"
+	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/mysql"
+	"log"
+	"main/tools"
 )
 
-func openDb() (db *sql.DB, err error) {
-	db, err = sql.Open("mysql", dbDsn)
+var DbDsn string
+
+func OpenDb() (db *sql.DB, err error) {
+	db, err = sql.Open("mysql", DbDsn)
 	if err != nil {
-		logOnError(err, "Cannot open database %s", dbDsn)
+		tools.LogOnError(err, "Cannot open database %s", DbDsn)
 	}
 	err = db.Ping()
 	if err != nil {
-		logOnError(err, "Cannot ping database %s", dbDsn)
+		tools.LogOnError(err, "Cannot ping database %s", DbDsn)
 	}
 	return
 }
 
-func dbSetStatus(db *sql.DB, tableName string, id int, state string) (err error) {
+func OpenGormDb() (db *gorm.DB, err error) {
+	db, err = gorm.Open("mysql", DbDsn)
+	if err != nil {
+		tools.LogOnError(err, "Cannot open database %s", DbDsn)
+	}
+	return
+}
+
+func DbSetStatus(db *sql.DB, tableName string, id int, state string) (err error) {
 	if db == nil {
 		err = errors.New("db must not be nil, please set a database connection first")
 		return
@@ -39,21 +52,21 @@ func dbSetStatus(db *sql.DB, tableName string, id int, state string) (err error)
 	return
 }
 
-func dbSetContentStatus(db *sql.DB, id int, state string) (err error) {
+func DbSetContentStatus(db *sql.DB, id int, state string) (err error) {
 	log.Printf("-- [ %d ] Set content state to '%s'", id, state)
-	err = dbSetStatus(db, "contents", id, state)
+	err = DbSetStatus(db, "contents", id, state)
 
 	return
 }
 
-func dbSetAssetStatus(db *sql.DB, id int, state string) (err error) {
+func DbSetAssetStatus(db *sql.DB, id int, state string) (err error) {
 	log.Printf("-- [ %d ] Set asset state to '%s'", id, state)
-	err = dbSetStatus(db, "assets", id, state)
+	err = DbSetStatus(db, "assets", id, state)
 
 	return
 }
 
-func dbSetFFmpegProgression(db *sql.DB, assetId int, fp FFMpegProgression) (err error) {
+func DbSetFFmpegProgression(db *sql.DB, assetId int, fp FFMpegProgress) (err error) {
 	if db == nil {
 		log.Printf("XX db must not be nil, please set a database connection first")
 		err = errors.New("db must not be nil, please set a database connection first")
@@ -94,7 +107,7 @@ func dbSetFFmpegProgression(db *sql.DB, assetId int, fp FFMpegProgression) (err 
 	return
 }
 
-func dbSetFFmpegLog(db *sql.DB, assetId int, fullLog string) {
+func DbSetFFmpegLog(db *sql.DB, assetId int, fullLog string) {
 	query := "INSERT INTO ffmpegLogs (`assetId`,`log`) VALUES (?,?)"
 	stmt, err := db.Prepare(query)
 	if err != nil {
