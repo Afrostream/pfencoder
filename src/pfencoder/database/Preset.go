@@ -1,7 +1,7 @@
 package database
 
 type Preset struct {
-	ID                 uint   `gorm:"primary_key;column:presetId"`
+	ID                 int   `gorm:"primary_key;column:presetId"`
 	ProfileId          int    `gorm:"column:profileId"`
 	PresetIdDependance string `gorm:"column:presetIdDependance"`
 	Type               string `gorm:"column:type"`

@@ -6,8 +6,8 @@ import (
 	"github.com/streadway/amqp"
 	"log"
 	"os"
-	"time"
 	"pfencoder/tools"
+	"time"
 )
 
 type ExchangerTask struct {
@@ -19,6 +19,7 @@ type ExchangerTask struct {
 	/* 'instance' variables */
 	amqpUri     string
 	initialized bool
+	hostname    string
 }
 
 func NewExchangerTask(rabbitmqHost string, rabbitmqPort int, rabbitmqUser string, rabbitmqPassword string) ExchangerTask {
@@ -28,11 +29,17 @@ func NewExchangerTask(rabbitmqHost string, rabbitmqPort int, rabbitmqUser string
 		rabbitmqPassword: rabbitmqPassword})
 }
 
-func (e *ExchangerTask) Init() {
+func (e *ExchangerTask) Init() bool {
 	log.Printf("-- ExchangerTask init starting...")
+	var err error
+	e.hostname, err = os.Hostname()
+	if err != nil {
+		log.Fatal(err)
+	}
 	e.amqpUri = fmt.Sprintf(`amqp://%s:%s@%s:%d`, e.rabbitmqUser, e.rabbitmqPassword, e.rabbitmqHost, e.rabbitmqPort)
 	e.initialized = true
 	log.Printf("-- ExchangerTask init done successfully")
+	return e.initialized
 }
 
 func (e *ExchangerTask) Start() {
@@ -121,20 +128,15 @@ func (e *ExchangerTask) Start() {
 				log.Printf("-- Receiving a message...")
 				log.Printf("-- Received a message: %s", d.Body)
 				var oMessage OrderMessage
-				err := json.Unmarshal([]byte(d.Body), &oMessage)
-				hostname, err := os.Hostname()
-				if err != nil {
-					log.Fatal(err)
-				} else {
-					if oMessage.Hostname == hostname {
-						if ffmpegProcesses < 4 {
-							log.Printf("-- Start running ffmpeg process")
-							transcoderTask := TranscoderTask{}
-							go transcoderTask.doEncoding(oMessage.AssetId)
-							log.Printf("-- Func doEncoding() thread created")
-						} else {
-							log.Printf("Cannot start one more ffmpeg process (encoding queue full)")
-						}
+				err = json.Unmarshal([]byte(d.Body), &oMessage)
+				if oMessage.Hostname == e.hostname {
+					if ffmpegProcesses < 4 {
+						log.Printf("-- Start running ffmpeg process")
+						transcoderTask := TranscoderTask{}
+						go transcoderTask.DoEncoding(oMessage.AssetId)
+						log.Printf("-- Func doEncoding() thread created")
+					} else {
+						log.Printf("Cannot start one more ffmpeg process (encoding queue full)")
 					}
 				}
 				log.Printf("-- Receiving a message done successfully")

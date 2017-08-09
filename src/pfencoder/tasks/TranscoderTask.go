@@ -1,34 +1,41 @@
 package tasks
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
-	"path"
-	"strings"
+	"net/http"
 	"os"
 	"os/exec"
-	"regexp"
-	"database/sql"
-	"net/http"
+	"path"
 	"pfencoder/database"
+	"regexp"
+	"strings"
+	"strconv"
 )
 
 var ffmpegProcesses = 0
 
-var ffmpegPath = os.Getenv(`FFMPEG_PATH`)
-var spumuxPath = os.Getenv(`SPUMUX_PATH`)
+var ffmpegPath = os.Getenv("FFMPEG_PATH")
+var spumuxPath = os.Getenv("SPUMUX_PATH")
 
-var encodedBasePath = os.Getenv(`VIDEOS_ENCODED_BASE_PATH`)
+var encodedBasePath = os.Getenv("VIDEOS_ENCODED_BASE_PATH")
+
+var pfSchedulerUrl = os.Getenv("PFSCHEDULER_BASE_URL")
 
 type TranscoderTask struct {
 	/* constructor */
-	/**/	
+	/**/
 }
 
-func (t *TranscoderTask) doEncoding(assetId int) {
+func (t *TranscoderTask) Init() bool {
+	return true
+}
+
+func (t *TranscoderTask) DoEncoding(assetId int) {
 	log.Printf("-- [ %d ] Encoding task received", assetId)
 	log.Printf("-- [ %d ] Get asset encoding configuration from database", assetId)
-	db,_ := database.OpenDb()
+	db, _ := database.OpenDb()
 	defer db.Close()
 	query := "SELECT c.contentId,c.uuid,c.filename,a2.filename,a.filename,p.presetId,p.profileId,p.type,p.cmdLine,p.createdAt,p.updatedAt FROM assets AS a LEFT JOIN presets AS p ON a.presetId=p.presetId LEFT JOIN assets AS a2 ON a.assetIdDependance=a2.assetId LEFT JOIN contents AS c ON c.contentId=a.contentId WHERE a.assetId=?"
 	stmt, err := db.Prepare(query)
@@ -278,7 +285,8 @@ func (t *TranscoderTask) doEncoding(assetId int) {
 }
 
 func (t *TranscoderTask) updateAssetsStreams(assetId int) {
-	url := fmt.Sprintf("http://p-afsmsch-001.afrostream.tv:4000/api/assetsStreams/%d", assetId)
+	//url := fmt.Sprintf("http://p-afsmsch-001.afrostream.tv:4000/api/assetsStreams/%d", assetId)
+	url := fmt.Sprintf("%s/api/assetsStreams/%d", pfSchedulerUrl, assetId)
 	_, err := http.Post(url, "application/json", strings.NewReader("{}"))
 	if err != nil {
 		log.Printf("XX Cannot update assetsStreams with url %s: %s", url, err)
@@ -288,6 +296,70 @@ func (t *TranscoderTask) updateAssetsStreams(assetId int) {
 	return
 }
 
-func (t *TranscoderTask) startEncoding(assetId int) {
+func (t *TranscoderTask) StartEncoding(assetId int) {
+	log.Printf("-- Transcoding assetId=%d started...", assetId)
+	//TODO
+	db, err := database.OpenGormDb()
+	if err != nil {
+		log.Printf("Cannot connect to database, error=%s", err)
+		//TODO => FAILED
+		return
+	}
+	defer db.Close()
+	//Asset Informations (RESULT)
+	asset := database.Asset{ID:assetId}
+	if db.Where(&asset).First(&asset).RecordNotFound() {
+		log.Printf("Cannot find asset with ID=%d, error=%s", assetId, err)
+		//TODO => FAILED
+		t.setAssetState(&asset, "failed")
+		return
+	}
+	//Content Informations (SOURCE)
+	content := database.Content{ID:asset.ContentId}
+	if db.Where(&content).First(&content).RecordNotFound() {
+		log.Printf("Cannot find content with ID=%d, error=%s", asset.ContentId, err)
+		//TODO => FAILED
+		t.setAssetState(&asset, "failed")
+		return
+	}
+	//DependanceAsset Informations (SOURCE BIS)
+	var dependanceAsset database.Asset
+	if asset.AssetIdDependance != "" {
+		dependanceAssetId, err := strconv.Atoi(asset.AssetIdDependance)
+		if err != nil {
+			//TODO => FAILED
+			t.setAssetState(&asset, "failed")
+			return
+		}
+		dependanceAsset = database.Asset{ID:dependanceAssetId}
+		if db.Where(&dependanceAsset).First(&dependanceAsset).RecordNotFound() {
+			log.Printf("Cannot find dependanceAsset with ID=%d, error=%s", asset.AssetIdDependance, err)
+			//TODO => FAILED
+			t.setAssetState(&asset, "failed")
+			return
+		}
+	}
+	preset := database.Preset{ID:asset.PresetId}
+	if db.Where(&preset).First(&preset).RecordNotFound() {
+		log.Printf("Cannot find preset with ID=%d, error=%s", asset.PresetId, err)
+		//TODO => FAILED
+		t.setAssetState(&asset, "failed")
+		return
+	}
+	//
+	//TODO
+	log.Printf("-- Transcoding assetId=%d ended successfully", assetId)
+}
+
+func (t *TranscoderTask) setAssetState(asset *database.Asset, state string) {
+	db, err := database.OpenGormDb()
+	if err != nil {
+		log.Printf("Cannot connect to database, error=%s", err)
+		//TODO => FAILED
+	}
+	defer db.Close()
+	asset.State = state
+	db.Save(asset)
+	
 	
 }

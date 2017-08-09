@@ -16,7 +16,7 @@ import (
 	"pfencoder/tasks"
 )
 
-func registerEncoder() (id uint, err error) {
+func registerEncoder() (id int, err error) {
 	/** NEW **/
 	hostname, err := os.Hostname()
 	if err != nil {
@@ -133,12 +133,12 @@ func createMonitoringTask() tasks.MonitoringTask {
 
 func createExchangerTask() tasks.ExchangerTask {
 	log.Println("-- createExchangerTask starting...")
-	rabbitmqHost := os.Getenv(`RABBITMQ_HOST`)
-	rabbitmqUser := os.Getenv(`RABBITMQ_USER`)
-	rabbitmqPassword := os.Getenv(`RABBITMQ_PASSWORD`)
+	rabbitmqHost := os.Getenv("RABBITMQ_HOST")
+	rabbitmqUser := os.Getenv("RABBITMQ_USER")
+	rabbitmqPassword := os.Getenv("RABBITMQ_PASSWORD")
 	rabbitmqPort := 5672
-	if os.Getenv(`RABBITMQ_PORT`) != "" {
-		rabbitmqPort, _ = strconv.Atoi(os.Getenv(`RABBITMQ_PORT`))
+	if os.Getenv("RABBITMQ_PORT") != "" {
+		rabbitmqPort, _ = strconv.Atoi(os.Getenv("RABBITMQ_PORT"))
 	}
 	exchangerTask := tasks.NewExchangerTask(rabbitmqHost, rabbitmqPort, rabbitmqUser, rabbitmqPassword)
 	log.Println("-- createExchangerTask done successfully")

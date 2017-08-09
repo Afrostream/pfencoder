@@ -12,19 +12,20 @@ import (
 
 type MonitoringTask struct {
 	/* constructor */
-	instanceId uint
+	instanceId int
 	/**/
 	initialized bool
 	uptimePath  string
 }
 
-func NewMonitoringTask(instanceId uint) MonitoringTask {
+func NewMonitoringTask(instanceId int) MonitoringTask {
 	return (MonitoringTask{instanceId: instanceId})
 }
 
-func (m *MonitoringTask) Init() {
-	m.uptimePath = os.Getenv(`UPTIME_PATH`)
+func (m *MonitoringTask) Init() bool {
+	m.uptimePath = os.Getenv("UPTIME_PATH")
 	m.initialized = true
+	return m.initialized
 }
 
 func (m *MonitoringTask) Start() {
@@ -50,9 +51,9 @@ func (m *MonitoringTask) Start() {
 				continue
 			}
 			defer db.Close()
-			encoder := database.Encoder{ID: m.instanceId}
+			encoder := database.Encoder{ID:m.instanceId}
 			if db.Where(&encoder).First(&encoder).RecordNotFound() {
-				log.Printf("Cannot found encoder in database with ID=%d", m.instanceId)
+				log.Printf("Cannot find encoder in database with ID=%d", m.instanceId)
 				continue
 			}
 			encoder.Load1 = load1
