@@ -12,8 +12,8 @@ import (
 	/* for testing purpose */
 	//"github.com/jinzhu/gorm"
 	//_ "github.com/jinzhu/gorm/dialects/mysql"
-	"main/database"
-	"main/tasks"
+	"pfencoder/database"
+	"pfencoder/tasks"
 )
 
 func registerEncoder() (id uint, err error) {
