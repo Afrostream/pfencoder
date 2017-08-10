@@ -10,8 +10,8 @@ import (
 	"path"
 	"pfencoder/database"
 	"regexp"
-	"strings"
 	"strconv"
+	"strings"
 )
 
 var ffmpegProcesses = 0
@@ -298,27 +298,24 @@ func (t *TranscoderTask) updateAssetsStreams(assetId int) {
 
 func (t *TranscoderTask) StartEncoding(assetId int) {
 	log.Printf("-- Transcoding assetId=%d started...", assetId)
-	//TODO
+	//DATABASE -->
 	db, err := database.OpenGormDb()
 	if err != nil {
 		log.Printf("Cannot connect to database, error=%s", err)
-		//TODO => FAILED
 		return
 	}
 	defer db.Close()
 	//Asset Informations (RESULT)
-	asset := database.Asset{ID:assetId}
+	asset := database.Asset{ID: assetId}
 	if db.Where(&asset).First(&asset).RecordNotFound() {
 		log.Printf("Cannot find asset with ID=%d, error=%s", assetId, err)
-		//TODO => FAILED
 		t.setAssetState(&asset, "failed")
 		return
 	}
 	//Content Informations (SOURCE)
-	content := database.Content{ID:asset.ContentId}
+	content := database.Content{ID: asset.ContentId}
 	if db.Where(&content).First(&content).RecordNotFound() {
 		log.Printf("Cannot find content with ID=%d, error=%s", asset.ContentId, err)
-		//TODO => FAILED
 		t.setAssetState(&asset, "failed")
 		return
 	}
@@ -327,39 +324,150 @@ func (t *TranscoderTask) StartEncoding(assetId int) {
 	if asset.AssetIdDependance != "" {
 		dependanceAssetId, err := strconv.Atoi(asset.AssetIdDependance)
 		if err != nil {
-			//TODO => FAILED
 			t.setAssetState(&asset, "failed")
 			return
 		}
-		dependanceAsset = database.Asset{ID:dependanceAssetId}
+		dependanceAsset = database.Asset{ID: dependanceAssetId}
 		if db.Where(&dependanceAsset).First(&dependanceAsset).RecordNotFound() {
 			log.Printf("Cannot find dependanceAsset with ID=%d, error=%s", asset.AssetIdDependance, err)
-			//TODO => FAILED
 			t.setAssetState(&asset, "failed")
 			return
 		}
 	}
-	preset := database.Preset{ID:asset.PresetId}
+	//Preset Informations
+	preset := database.Preset{ID: asset.PresetId}
 	if db.Where(&preset).First(&preset).RecordNotFound() {
 		log.Printf("Cannot find preset with ID=%d, error=%s", asset.PresetId, err)
-		//TODO => FAILED
+		t.setAssetState(&asset, "failed")
+		return
+	}
+	//ProfileParameters Informations
+	profilesParameters := []database.ProfilesParameter{}
+	db.Where(&database.ProfilesParameter{AssetId: asset.ID}).Find(&profilesParameters)
+	//
+	//AssetsFromSameContent Informations
+	assetsFromSameContent := []database.Asset{}
+	db.Where(&database.Asset{ContentId: content.ID}).Find(&assetsFromSameContent)
+	//<-- DATABASE
+	sourceFilename := dependanceAsset.Filename
+	if sourceFilename == "" {
+		sourceFilename = content.Filename
+	}
+	dir := path.Dir(asset.Filename)
+	err = os.MkdirAll(dir, 0755)
+	if err != nil {
+		log.Printf("Cannot create directory %s, error=%s", dir, err)
+		t.setAssetState(&asset, "failed")
+		return
+	}
+	subtitlesStr, subtitlesMap, err := t.generateSubtitles(content, dir)
+	if err != nil {
+		log.Printf("Cannot generate subtitles, error=%s", err)
 		t.setAssetState(&asset, "failed")
 		return
 	}
 	//
+	//
+	cmdLine, err := t.generateCommandLine(sourceFilename,
+		content,
+		asset,
+		assetsFromSameContent,
+		preset,
+		profilesParameters,
+		subtitlesStr,
+		subtitlesMap)
 	//TODO
+	log.Printf("cmdLine:%s", cmdLine)
+	//TO BE CONTINUED
 	log.Printf("-- Transcoding assetId=%d ended successfully", assetId)
 }
 
 func (t *TranscoderTask) setAssetState(asset *database.Asset, state string) {
 	db, err := database.OpenGormDb()
 	if err != nil {
-		log.Printf("Cannot connect to database, error=%s", err)
+		log.Printf("generateCommandLine : Cannot connect to database, error=%s", err)
 		//TODO => FAILED
 	}
 	defer db.Close()
 	asset.State = state
 	db.Save(asset)
-	
-	
+}
+
+func (t *TranscoderTask) generateSubtitles(content database.Content, dir string) (subtitlesStr string, subtitlesMap map[string]string, err error) {
+	db, err := database.OpenGormDb()
+	if err != nil {
+		log.Printf("generateCommandLine : Cannot connect to database, error=%s", err)
+		return
+	}
+	defer db.Close()
+	subtitles := []database.Subtitle{}
+	db.Where(&database.Subtitle{ContentId: content.ID}).Find(&subtitles)
+	rowsEmpty := true
+	for _, subtitle := range subtitles {
+		lang := subtitle.Lang
+		rowUrl := subtitle.Url
+		// TODO : emulate : lang,SUBSTRING_INDEX(url, '/', -1) AS vtt
+		vtt := rowUrl
+		subtitlesMap[lang] = encodedBasePath + "/origin/vod/" + path.Base(dir) + "/" + strings.Replace(vtt, " ", "_", -1)
+		subtitlesStr += strings.Replace(vtt, " ", "_", -1) + "%" + lang + " "
+		rowsEmpty = false
+	}
+	//TODO : NCO : Why do we remove last caracter ?
+	if rowsEmpty == false {
+		subtitlesStr = subtitlesStr[:len(subtitlesStr)-1]
+	}
+	return
+}
+
+func (t *TranscoderTask) generateCommandLine(sourceFilename string,
+	content database.Content,
+	asset database.Asset,
+	assetsFromSameContent []database.Asset,
+	preset database.Preset,
+	profilesParameters []database.ProfilesParameter,
+	subtitlesStr string,
+	subtitlesMap map[string]string) (cmdLine string, err error) {
+	cmdLine = strings.Replace(preset.CmdLine, "%SOURCE%", sourceFilename, -1)
+	cmdLine = strings.Replace(cmdLine, "%DESTINATION%", asset.Filename, -1)
+	cmdLine = strings.Replace(cmdLine, "%UUID%", content.Uuid, -1)
+	cmdLine = strings.Replace(cmdLine, "%BASEDIR%", path.Dir(asset.Filename), -1)
+	cmdLine = strings.Replace(cmdLine, "%SUBTITLES%", subtitlesStr, -1)
+	for k, l := range subtitlesMap {
+		log.Printf("k is %s", k)
+		cmdLine = strings.Replace(cmdLine, "%SUBTITLE_"+strings.ToUpper(k)+"%", l, -1)
+	}
+	re, err := regexp.Compile("%SOURCE_[0-9]+%")
+	if err != nil {
+		log.Printf("generateCommandLine : Cannot compile regexp %SOURCE_[0-9]+%: %s", err)
+		return
+	}
+	matches := re.FindAllString(cmdLine, -1)
+	if matches != nil {
+		for _, m := range matches {
+			str := strings.Split(m, "_")
+			var str1AsInt int
+			str1AsInt, err = strconv.Atoi(str[1])
+			if err != nil {
+				log.Printf("generateCommandLine : conversion failed, error=%s", err)
+				return
+			}
+			//TODO : NCO : MAYBE BETTER WAY (LATER)
+			assetFromSameContentFound := false
+			for _, assetFromSameContent := range assetsFromSameContent {
+				if assetFromSameContent.PresetId == str1AsInt {
+					cmdLine = strings.Replace(cmdLine, m, assetFromSameContent.Filename, -1)
+					assetFromSameContentFound = true
+				}
+			}
+			if assetFromSameContentFound == false {
+				log.Printf("generateCommandLine : no assetFromSameContent found for assetId=%d with contentId=%d presetId=%d", asset.ID, content.ID, str1AsInt)
+				return
+			}
+		}
+	}
+	//Parameters
+	for _, profilesParameter := range profilesParameters {
+		cmdLine = strings.Replace(cmdLine, "%"+profilesParameter.Parameter+"%", profilesParameter.Value, -1)
+	}
+	return
 }
