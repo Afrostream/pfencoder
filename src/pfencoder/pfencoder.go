@@ -38,7 +38,7 @@ func registerEncoder() (id int, err error) {
 
 func main() {
 	/** TESTING ZONE PURPOSE **/
-	log.Println("-- TESTING ZONE PURPOSE...")
+	//log.Println("-- TESTING ZONE PURPOSE...")
 	/*mysqlHost := os.Getenv(`MYSQL_HOST`)
 	mysqlUser := os.Getenv(`MYSQL_USER`)
 	mysqlPassword := os.Getenv(`MYSQL_PASSWORD`)
@@ -87,12 +87,12 @@ func main() {
 
 func initGlobals() {
 	log.Println("-- initGlobals starting...")
-	mysqlHost := os.Getenv(`MYSQL_HOST`)
-	mysqlUser := os.Getenv(`MYSQL_USER`)
-	mysqlPassword := os.Getenv(`MYSQL_PASSWORD`)
+	mysqlHost := os.Getenv("MYSQL_HOST")
+	mysqlUser := os.Getenv("MYSQL_USER")
+	mysqlPassword := os.Getenv("MYSQL_PASSWORD")
 	mySqlPort := 3306
-	if os.Getenv(`MYSQL_PORT`) != "" {
-		mySqlPort, _ = strconv.Atoi(os.Getenv(`MYSQL_PORT`))
+	if os.Getenv("MYSQL_PORT") != "" {
+		mySqlPort, _ = strconv.Atoi(os.Getenv("MYSQL_PORT"))
 	}
 	database.DbDsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/video_encoding", mysqlUser, mysqlPassword, mysqlHost, mySqlPort)
 	log.Println("-- initGlobals done successfully")

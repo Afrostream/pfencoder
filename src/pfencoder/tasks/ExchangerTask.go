@@ -20,13 +20,16 @@ type ExchangerTask struct {
 	amqpUri     string
 	initialized bool
 	hostname    string
+	/* For test purpose only **/
+	transcodingVersion int
 }
 
 func NewExchangerTask(rabbitmqHost string, rabbitmqPort int, rabbitmqUser string, rabbitmqPassword string) ExchangerTask {
 	return (ExchangerTask{rabbitmqHost: rabbitmqHost,
-		rabbitmqPort:     rabbitmqPort,
-		rabbitmqUser:     rabbitmqUser,
-		rabbitmqPassword: rabbitmqPassword})
+		rabbitmqPort:       rabbitmqPort,
+		rabbitmqUser:       rabbitmqUser,
+		rabbitmqPassword:   rabbitmqPassword,
+		transcodingVersion: 1})
 }
 
 func (e *ExchangerTask) Init() bool {
@@ -131,10 +134,16 @@ func (e *ExchangerTask) Start() {
 				err = json.Unmarshal([]byte(d.Body), &oMessage)
 				if oMessage.Hostname == e.hostname {
 					if ffmpegProcesses < 4 {
-						log.Printf("-- Start running ffmpeg process")
-						transcoderTask := TranscoderTask{}
-						go transcoderTask.DoEncoding(oMessage.AssetId)
-						log.Printf("-- Func doEncoding() thread created")
+						log.Printf("-- TranscoderTask creating...")
+						transcoderTask := NewTranscoderTask(oMessage.AssetId)
+						transcoderTask.Init()
+						log.Printf("-- TranscoderTask inited, starting Encoding, version=%d", e.transcodingVersion)
+						if e.transcodingVersion == 1 {
+							go transcoderTask.StartEncoding()	
+						} else {
+							go transcoderTask.DoEncoding()
+						}
+						log.Printf("-- TranscoderTask creating done successfully")
 					} else {
 						log.Printf("Cannot start one more ffmpeg process (encoding queue full)")
 					}

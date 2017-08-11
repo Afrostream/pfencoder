@@ -52,6 +52,7 @@ func DbSetStatus(db *sql.DB, tableName string, id int, state string) (err error)
 	return
 }
 
+// DEPRECATED
 func DbSetContentStatus(db *sql.DB, id int, state string) (err error) {
 	log.Printf("-- [ %d ] Set content state to '%s'", id, state)
 	err = DbSetStatus(db, "contents", id, state)
@@ -59,6 +60,7 @@ func DbSetContentStatus(db *sql.DB, id int, state string) (err error) {
 	return
 }
 
+// DEPRECATED
 func DbSetAssetStatus(db *sql.DB, id int, state string) (err error) {
 	log.Printf("-- [ %d ] Set asset state to '%s'", id, state)
 	err = DbSetStatus(db, "assets", id, state)
@@ -66,7 +68,8 @@ func DbSetAssetStatus(db *sql.DB, id int, state string) (err error) {
 	return
 }
 
-func DbSetFFmpegProgression(db *sql.DB, assetId int, fp FFMpegProgress) (err error) {
+// DEPRECATED
+func DbSetFFmpegProgression(db *sql.DB, assetId int, fp FfmpegProgressV0) (err error) {
 	if db == nil {
 		log.Printf("XX db must not be nil, please set a database connection first")
 		err = errors.New("db must not be nil, please set a database connection first")
@@ -107,6 +110,7 @@ func DbSetFFmpegProgression(db *sql.DB, assetId int, fp FFMpegProgress) (err err
 	return
 }
 
+// DEPRECATED
 func DbSetFFmpegLog(db *sql.DB, assetId int, fullLog string) {
 	query := "INSERT INTO ffmpegLogs (`assetId`,`log`) VALUES (?,?)"
 	stmt, err := db.Prepare(query)
