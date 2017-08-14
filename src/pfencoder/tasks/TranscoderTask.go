@@ -32,7 +32,7 @@ type TranscoderTask struct {
 }
 
 func NewTranscoderTask(assetId int) TranscoderTask {
-	return (TranscoderTask{assetId:assetId})
+	return (TranscoderTask{assetId: assetId})
 }
 
 func (t *TranscoderTask) Init() bool {
@@ -333,17 +333,30 @@ func (t *TranscoderTask) StartEncoding() {
 	//DependanceAsset Informations (SOURCE BIS)
 	var dependanceAsset database.Asset
 	if asset.AssetIdDependance != "" {
-		dependanceAssetId, err := strconv.Atoi(asset.AssetIdDependance)
-		if err != nil {
+		values := strings.Split(asset.AssetIdDependance, ",")
+		if len(values) > 0 {
+			//NCO previous code use LEFT JOIN that seems to take 1ST value only, here we try to do the same...
+			dependanceAssetIdStr := values[0]
+			dependanceAssetId, err := strconv.Atoi(dependanceAssetIdStr)
+			if err != nil {
+				log.Printf("Cannot convert AssetIdDependance=%s, error=%s", dependanceAssetIdStr, err)
+				t.setAssetState(&asset, "failed")
+				return
+			}
+			dependanceAsset = database.Asset{ID: dependanceAssetId}
+			if db.Where(&dependanceAsset).First(&dependanceAsset).RecordNotFound() {
+				log.Printf("Cannot find dependanceAsset with ID=%d", dependanceAssetId)
+				t.setAssetState(&asset, "failed")
+				return
+			}
+		} else {
+			log.Printf("Cannot split AssetIdDependance=%s", asset.AssetIdDependance)
 			t.setAssetState(&asset, "failed")
 			return
 		}
-		dependanceAsset = database.Asset{ID: dependanceAssetId}
-		if db.Where(&dependanceAsset).First(&dependanceAsset).RecordNotFound() {
-			log.Printf("Cannot find dependanceAsset with ID=%d, error=%s", asset.AssetIdDependance, err)
-			t.setAssetState(&asset, "failed")
-			return
-		}
+		log.Printf("-- Using dependanceAsset with ID=%d", dependanceAsset.ID)
+	} else {
+		log.Printf("-- no AssetIdDependance set")
 	}
 	//Preset Informations
 	preset := database.Preset{ID: asset.PresetId}
@@ -416,7 +429,7 @@ func (t *TranscoderTask) setAssetState(asset *database.Asset, state string) {
 	db.Save(asset)
 }
 
-func(t* TranscoderTask) setFfmpegProgress(v []string) (ffmpegProgress database.FfmpegProgress, err error) {
+func (t *TranscoderTask) setFfmpegProgress(v []string) (ffmpegProgress database.FfmpegProgress, err error) {
 	db, err := database.OpenGormDb()
 	if err != nil {
 		log.Printf("setFfmpegProgress : Cannot connect to database, error=%s", err)
@@ -424,8 +437,8 @@ func(t* TranscoderTask) setFfmpegProgress(v []string) (ffmpegProgress database.F
 	}
 	defer db.Close()
 	/* NCO : Cannot use "primary_key because there's no one...*/
-	ffmpegProgress = database.FfmpegProgress{AssetId:t.assetId}
-		//GET
+	ffmpegProgress = database.FfmpegProgress{AssetId: t.assetId}
+	//GET
 	if db.Where(&ffmpegProgress).First(&ffmpegProgress).RecordNotFound() {
 		//CREATE
 		db.Create(&ffmpegProgress)
@@ -466,12 +479,12 @@ func(t* TranscoderTask) setFfmpegProgress(v []string) (ffmpegProgress database.F
 	return
 }
 
-func (t* TranscoderTask) addFfmpegLog(msg string) (ffmpegLog database.FfmpegLog, err error) {
+func (t *TranscoderTask) addFfmpegLog(msg string) (ffmpegLog database.FfmpegLog, err error) {
 	db, err := database.OpenGormDb()
 	if err != nil {
 		log.Printf("addFfmpegLog : Cannot connect to database, error=%s", err)
 	}
-	ffmpegLog = database.FfmpegLog{AssetId:t.assetId, Log:msg}
+	ffmpegLog = database.FfmpegLog{AssetId: t.assetId, Log: msg}
 	db.Create(&ffmpegLog)
 	return
 }
@@ -484,7 +497,7 @@ func (t *TranscoderTask) generateSubtitles(content database.Content, dir string)
 	}
 	defer db.Close()
 	subtitles := []database.Subtitle{}
-	db.Where(&database.Subtitle{ContentId:content.ID}).Find(&subtitles)
+	db.Where(&database.Subtitle{ContentId: content.ID}).Find(&subtitles)
 	rowsEmpty := true
 	for _, subtitle := range subtitles {
 		lang := subtitle.Lang
@@ -528,8 +541,11 @@ func (t *TranscoderTask) generateCommandLine(sourceFilename string,
 	if matches != nil {
 		for _, m := range matches {
 			str := strings.Split(m, "_")
+			//Remove last % before cast to int...
+			str1AsIntStr := str[1]
+			str1AsIntStr = str1AsIntStr[:(len(str1AsIntStr) - 1)]
 			var str1AsInt int
-			str1AsInt, err = strconv.Atoi(str[1])
+			str1AsInt, err = strconv.Atoi(str1AsIntStr)
 			if err != nil {
 				log.Printf("generateCommandLine : conversion failed, error=%s", err)
 				return
@@ -584,7 +600,7 @@ func (t *TranscoderTask) executeCommand(Type string, cmdLine string) (generalErr
 	log.Printf("-- [ %d ] executeCommand : command starting... : %s %s", t.assetId, binaryPath, strings.Join(cmdArgs, " "))
 	generalErr = cmd.Start()
 	if generalErr != nil {
-		//NCO : putted outside, but why content status does changes ? 
+		//NCO : putted outside, but why content status does changes ?
 		/*database.DbSetAssetStatus(db, t.assetId, "failed")
 		if contentId != nil {
 			database.DbSetContentStatus(db, *contentId, "failed")

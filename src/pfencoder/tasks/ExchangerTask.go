@@ -65,7 +65,7 @@ func (e *ExchangerTask) Start() {
 			defer ch.Close()
 			log.Printf("-- opening channel done successfully")
 		}
-		var msgs<-chan amqp.Delivery
+		var msgs <-chan amqp.Delivery
 		if err == nil {
 			log.Printf("-- declaring an exchange...")
 			err = ch.ExchangeDeclare(
@@ -157,7 +157,7 @@ func (e *ExchangerTask) Start() {
 						transcoderTask.Init()
 						log.Printf("-- TranscoderTask inited, starting Encoding, version=%d", e.transcodingVersion)
 						if e.transcodingVersion == 1 {
-							go transcoderTask.StartEncoding()	
+							go transcoderTask.StartEncoding()
 						} else {
 							go transcoderTask.DoEncoding()
 						}

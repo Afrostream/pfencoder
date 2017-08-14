@@ -2,9 +2,9 @@ package tasks
 
 import (
 	"log"
-	"pfencoder/database"
 	"os"
 	"os/exec"
+	"pfencoder/database"
 	"regexp"
 	"strconv"
 	"time"
@@ -19,7 +19,7 @@ type MonitoringTask struct {
 }
 
 func NewMonitoringTask(instanceId int) MonitoringTask {
-	return (MonitoringTask{instanceId:instanceId})
+	return (MonitoringTask{instanceId: instanceId})
 }
 
 func (m *MonitoringTask) Init() bool {
@@ -44,13 +44,13 @@ func (m *MonitoringTask) Start() {
 				log.Printf("Cannot parse load1 as float32, error=%s", err)
 				continue
 			}
-			log.Printf("-- MonitoringTask Thread ticker, load1=%f", load1)
+			//log.Printf("-- MonitoringTask Thread ticker, load1=%f", load1)
 			db, err := database.OpenGormDb()
 			if err != nil {
 				log.Printf("Cannot connect to database, error=%s", err)
 				continue
 			}
-			encoder := database.Encoder{ID:m.instanceId}
+			encoder := database.Encoder{ID: m.instanceId}
 			if db.Where(&encoder).First(&encoder).RecordNotFound() {
 				log.Printf("Cannot find encoder in database with ID=%d", m.instanceId)
 				continue
@@ -71,7 +71,7 @@ func (m *MonitoringTask) load1WithInputToCompile(input string) (load1 float32, e
 		log.Printf("Cannot exec cmd %s: %s", m.uptimePath, err)
 		return
 	}
-	log.Printf("Uptime output=%s", string(s))
+	//log.Printf("Uptime output=%s", string(s))
 	re, err := regexp.Compile(input)
 	if err != nil {
 		log.Printf("Cannot compile regexp: %s", err)
@@ -92,6 +92,12 @@ func (m *MonitoringTask) load1WithInputToCompile(input string) (load1 float32, e
 }
 
 func (m *MonitoringTask) load1() (load1 float32, err error) {
+	//TODO : one load, two parses
+	//PRODUCTION (1ST TRY)
 	load1, err = m.load1WithInputToCompile("load average: *([0-9\\.]*), *")
+	//MAC (2ND TRY)
+	if err != nil {
+		load1, err = m.load1WithInputToCompile("load averages: *([0-9\\.]*) *")
+	}
 	return
 }
