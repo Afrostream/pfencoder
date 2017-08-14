@@ -38,31 +38,28 @@ func (m *MonitoringTask) Start() {
 	go func() {
 		log.Printf("-- MonitoringTask Thread started")
 		for _ = range ticker.C {
-			log.Printf("-- MonitoringTask Thread ticker...")
-			//FIXME
-			/*load1, err := m.load1()
+			//log.Printf("-- MonitoringTask Thread ticker...")
+			load1, err := m.load1()
 			if err != nil {
 				log.Printf("Cannot parse load1 as float32, error=%s", err)
 				continue
 			}
-			log.Printf("-- MonitoringTask Thread ticker, load1=%f", load1)*/
+			log.Printf("-- MonitoringTask Thread ticker, load1=%f", load1)
 			db, err := database.OpenGormDb()
 			if err != nil {
 				log.Printf("Cannot connect to database, error=%s", err)
 				continue
 			}
-			defer db.Close()
 			encoder := database.Encoder{ID:m.instanceId}
 			if db.Where(&encoder).First(&encoder).RecordNotFound() {
 				log.Printf("Cannot find encoder in database with ID=%d", m.instanceId)
 				continue
 			}
-			//FIXME
-			/*encoder.Load1 = load1*/
-			encoder.Load1 = 0.0
+			encoder.Load1 = load1
 			encoder.ActiveTasks = ffmpegProcesses
 			db.Save(&encoder)
-			log.Printf("-- MonitoringTask Thread ticker done successfully")
+			db.Close()
+			//log.Printf("-- MonitoringTask Thread ticker done successfully")
 		}
 		log.Printf("MonitoringTask Thread stopped")
 	}()

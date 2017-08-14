@@ -18,3 +18,7 @@ type FfmpegProgress struct {
 	Elapsed string  `gorm:"column:elapsed"`
 	Bitrate float32 `gorm:"column:bitrate"`
 }
+
+func (FfmpegProgress) TableName() string {
+  return "ffmpegProgress"
+}

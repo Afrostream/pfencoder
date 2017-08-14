@@ -8,3 +8,7 @@ type Profile struct {
 	CreatedAt       string `gorm:"column:createdAt"`
 	UpdatedAt       string `gorm:"column:updatedAt"`
 }
+
+func (Profile) TableName() string {
+  return "profiles"
+}

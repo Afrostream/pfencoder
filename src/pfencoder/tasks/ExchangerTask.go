@@ -39,7 +39,7 @@ func (e *ExchangerTask) Init() bool {
 	if err != nil {
 		log.Fatal(err)
 	}
-	e.amqpUri = fmt.Sprintf(`amqp://%s:%s@%s:%d`, e.rabbitmqUser, e.rabbitmqPassword, e.rabbitmqHost, e.rabbitmqPort)
+	e.amqpUri = fmt.Sprintf("amqp://%s:%s@%s:%d", e.rabbitmqUser, e.rabbitmqPassword, e.rabbitmqHost, e.rabbitmqPort)
 	e.initialized = true
 	log.Printf("-- ExchangerTask init done successfully")
 	return e.initialized
@@ -58,13 +58,16 @@ func (e *ExchangerTask) Start() {
 		conn := e.connectToRabbitMQ()
 		defer conn.Close()
 		notify := conn.NotifyClose(make(chan *amqp.Error))
+		log.Printf("-- opening channel...")
 		ch, err := conn.Channel()
 		tools.LogOnError(err, "Failed to open a channel")
-		var msgs <-chan amqp.Delivery
-		if err != nil {
+		if err == nil {
 			defer ch.Close()
+			log.Printf("-- opening channel done successfully")
 		}
-		if err != nil {
+		var msgs<-chan amqp.Delivery
+		if err == nil {
+			log.Printf("-- declaring an exchange...")
 			err = ch.ExchangeDeclare(
 				"afsm-encoders", // name
 				"fanout",        // type
@@ -75,9 +78,13 @@ func (e *ExchangerTask) Start() {
 				nil,             // arguments
 			)
 			tools.LogOnError(err, "Failed to declare an exchange")
+			if err == nil {
+				log.Printf("-- declaring an exchange done successfully")
+			}
 		}
 		var q amqp.Queue
-		if err != nil {
+		if err == nil {
+			log.Printf("-- declaring a queue...")
 			q, err = ch.QueueDeclare(
 				"",
 				false,
@@ -87,8 +94,12 @@ func (e *ExchangerTask) Start() {
 				nil,
 			)
 			tools.LogOnError(err, "Failed to declare a queue")
+			if err == nil {
+				log.Printf("-- declaring an queue done successfully")
+			}
 		}
-		if err != nil {
+		if err == nil {
+			log.Printf("-- binding a queue...")
 			err = ch.QueueBind(
 				q.Name,          // queue name
 				"",              // routing key
@@ -97,8 +108,12 @@ func (e *ExchangerTask) Start() {
 				nil,
 			)
 			tools.LogOnError(err, "Failed to bind a queue")
+			if err == nil {
+				log.Printf("-- binding a queue done successfully")
+			}
 		}
-		if err != nil {
+		if err == nil {
+			log.Printf("-- registring a consumer...")
 			msgs, err = ch.Consume(
 				q.Name,
 				"",
@@ -109,6 +124,9 @@ func (e *ExchangerTask) Start() {
 				nil,
 			)
 			tools.LogOnError(err, "Failed to register a consumer")
+			if err == nil {
+				log.Printf("-- registring a consumer done successfully")
+			}
 		}
 		if err == nil {
 			done = true
@@ -122,16 +140,16 @@ func (e *ExchangerTask) Start() {
 	MSGSLOOP:
 		for {
 			select {
-			case err := <-notify:
+			case failedError := <-notify:
 				//work with error
-				tools.LogOnError(err, "Lost connection to the RabbitMQ, will retry connection...")
+				tools.LogOnError(failedError, "Lost connection to the RabbitMQ, will retry connection...")
 				break MSGSLOOP //reconnect
-			case d := <-msgs:
+			case msg := <-msgs:
 				//work with message
 				log.Printf("-- Receiving a message...")
-				log.Printf("-- Received a message: %s", d.Body)
+				log.Printf("-- Received a message: %s", msg.Body)
 				var oMessage OrderMessage
-				err = json.Unmarshal([]byte(d.Body), &oMessage)
+				err = json.Unmarshal([]byte(msg.Body), &oMessage)
 				if oMessage.Hostname == e.hostname {
 					if ffmpegProcesses < 4 {
 						log.Printf("-- TranscoderTask creating...")
@@ -147,6 +165,8 @@ func (e *ExchangerTask) Start() {
 					} else {
 						log.Printf("Cannot start one more ffmpeg process (encoding queue full)")
 					}
+				} else {
+					log.Printf("-- message ignored : hostame=%s, message.hostname=%s", e.hostname, oMessage.Hostname)
 				}
 				log.Printf("-- Receiving a message done successfully")
 			}

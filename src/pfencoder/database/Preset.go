@@ -10,3 +10,7 @@ type Preset struct {
 	CreatedAt          string `gorm:"column:createdAt"`
 	UpdatedAt          string `gorm:"column:updatedAt"`
 }
+
+func (Preset) TableName() string {
+  return "presets"
+}

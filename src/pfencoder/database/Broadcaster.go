@@ -5,3 +5,7 @@ type Broadcaster struct {
 	Name      string `gorm:"column:name"`
 	ProfileId int    `gorm:"column:profileId"`
 }
+
+func (Broadcaster) TableName() string {
+  return "broadcasters"
+}

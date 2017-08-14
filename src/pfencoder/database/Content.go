@@ -13,3 +13,7 @@ type Content struct {
 	CreatedAt  string `gorm:"column:createdAt"`
 	UpdatedAt  string `gorm:"column:updatedAt"`
 }
+
+func (Content) TableName() string {
+  return "contents"
+}

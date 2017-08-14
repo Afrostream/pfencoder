@@ -6,3 +6,7 @@ type Subtitle struct {
 	Lang      string `gorm:"column:lang"`
 	Url       string `gorm:"column:url"`
 }
+
+func (Subtitle) TableName() string {
+  return "subtitles"
+}

@@ -9,3 +9,7 @@ type ProfilesParameter struct {
 	CreatedAt string `gorm:"column:createdAt"`
 	UpdatedAt string `gorm:"column:updatedAt"`
 }
+
+func (ProfilesParameter) TableName() string {
+  return "profilesParameters"
+}
