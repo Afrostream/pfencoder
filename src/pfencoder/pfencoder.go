@@ -31,6 +31,10 @@ func registerEncoder() (id int, err error) {
 	defer db.Close()
 	encoder := database.Encoder{Hostname: hostname}
 	db.Where(&encoder).FirstOrCreate(&encoder)
+	//RESET activeTasks, load1 (encoder is starting !)
+	encoder.ActiveTasks = 0
+	encoder.Load1 = 0
+	db.Save(&encoder)
 	id = encoder.ID
 	log.Printf("-- Registering encoder '%s' done successfully, id=%d", hostname, id)
 	return

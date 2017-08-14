@@ -432,25 +432,35 @@ func(t* TranscoderTask) setFfmpegProgress(v []string) (ffmpegProgress database.F
 	}
 	//UPDATE
 	frame, err := strconv.Atoi(v[1])
-	if err != nil {
+	if err == nil {
 		ffmpegProgress.Frame = frame
+	} else {
+		log.Printf("setFfmpegProgress : conversion failed for frame, string=%s", v[1])
 	}
 	fps, err := strconv.Atoi(v[2])
-	if err != nil {
+	if err == nil {
 		ffmpegProgress.Fps = fps
+	} else {
+		log.Printf("setFfmpegProgress : conversion failed for fps, string=%s", v[2])
 	}
-	q, err := strconv.Atoi(v[3])
-	if err != nil {
-		ffmpegProgress.Q = q
+	q, err := strconv.ParseFloat(v[3], 32)
+	if err == nil {
+		ffmpegProgress.Q = float32(q)
+	} else {
+		log.Printf("setFfmpegProgress : conversion failed for q, string=%s", v[3])
 	}
 	size, err := strconv.Atoi(v[4])
-	if err != nil {
+	if err == nil {
 		ffmpegProgress.Size = size
+	} else {
+		log.Printf("setFfmpegProgress : conversion failed for size, string=%s", v[4])
 	}
 	ffmpegProgress.Elapsed = strings.Split(v[5], ".")[0]
 	bitrate, err := strconv.ParseFloat(v[6], 32)
-	if err != nil {
+	if err == nil {
 		ffmpegProgress.Bitrate = float32(bitrate)
+	} else {
+		log.Printf("setFfmpegProgress : conversion failed for bitrate, string=%s", v[6])
 	}
 	db.Save(&ffmpegProgress)
 	return
