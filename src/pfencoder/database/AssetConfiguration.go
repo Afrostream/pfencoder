@@ -1,6 +1,6 @@
 package database
 
-/* NC : Maybe to be removed / changed later ... */
+/* TODO : NCO : TO BE REMOVED */
 
 type AssetConfiguration struct {
   SrcFilename	*string

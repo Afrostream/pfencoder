@@ -1,14 +1,12 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"log"
 	"os"
 	"runtime"
 	"strconv"
-	"time"
 	/* for testing purpose */
 	//"github.com/jinzhu/gorm"
 	//_ "github.com/jinzhu/gorm/dialects/mysql"
@@ -17,14 +15,13 @@ import (
 )
 
 func registerEncoder() (id int, err error) {
-	/** NEW **/
 	hostname, err := os.Hostname()
 	if err != nil {
 		panic(err)
 	}
 	log.Printf("-- Registering encoder '%s'...", hostname)
 	/* opening database */
-	db, err := database.OpenGormDb()
+	db, err := database.OpenGormDbOnce()
 	if err != nil {
 		panic(err)
 	}
@@ -43,38 +40,21 @@ func registerEncoder() (id int, err error) {
 func main() {
 	/** TESTING ZONE PURPOSE **/
 	//log.Println("-- TESTING ZONE PURPOSE...")
-	/*mysqlHost := os.Getenv(`MYSQL_HOST`)
-	mysqlUser := os.Getenv(`MYSQL_USER`)
-	mysqlPassword := os.Getenv(`MYSQL_PASSWORD`)
-	mySqlPort := 3306
-	if os.Getenv(`MYSQL_PORT`) != "" {
-		mySqlPort, _ = strconv.Atoi(os.Getenv(`MYSQL_PORT`))
-	}
-	db, err := gorm.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/video_encoding", mysqlUser, mysqlPassword, mysqlHost, mySqlPort))
-	if err != nil {
-		log.Println("PB DB")
-	}
-	defer db.Close()
-	db.LogMode(true)
-	var preset database.Preset
-	db.First(&preset, 3)
-	log.Println(fmt.Printf("%+v\n", preset))
-	log.Println("-- TESTING ZONE PURPOSE DONE SUCCESSULLY")
-	return*/
+	//
+	//log.Println("-- TESTING ZONE PURPOSE DONE SUCCESSULLY")
+	//return
 	/** TESTING ZONE PURPOSE **/
 	log.Println("-- pfencoder starting...")
-	var monitoringTask tasks.MonitoringTask
-	var exchangerTask tasks.ExchangerTask
 
 	initGlobals()
 
 	initChecks()
 
-	monitoringTask = createMonitoringTask()
+	monitoringTask := createMonitoringTask()
 	monitoringTask.Init()
 	monitoringTask.Start()
 
-	exchangerTask = createExchangerTask()
+	exchangerTask := createExchangerTask()
 	exchangerTask.Init()
 	exchangerTask.Start()
 
@@ -98,7 +78,11 @@ func initGlobals() {
 	if os.Getenv("MYSQL_PORT") != "" {
 		mySqlPort, _ = strconv.Atoi(os.Getenv("MYSQL_PORT"))
 	}
-	database.DbDsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/video_encoding", mysqlUser, mysqlPassword, mysqlHost, mySqlPort)
+	mySqlDatabase := "video_encoding"
+	if os.Getenv("MYSQL_DATABASE") != "" {
+		mySqlDatabase = os.Getenv("MYSQL_DATABASE")
+	}
+	database.DbDsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", mysqlUser, mysqlPassword, mysqlHost, mySqlPort, mySqlDatabase)
 	log.Println("-- initGlobals done successfully")
 }
 
@@ -106,18 +90,11 @@ func initChecks() {
 	log.Println("-- initChecks starting...")
 	//TODO : binaries are functional
 	//database is up
-	var db *sql.DB
-	var err error
-	first := true
-	for first == true || err != nil {
-		db, err = database.OpenDb()
-		defer db.Close()
-		if err != nil {
-			log.Printf("Cannot connect to DB, Waiting for MySQL...")
-			time.Sleep(1 * time.Second)
-		}
-		first = false
+	db, err := database.OpenGormDbOnce()
+	if err != nil {
+		panic(err)
 	}
+	defer db.Close()
 	log.Println("-- initChecks done successfully")
 }
 

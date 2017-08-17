@@ -8,10 +8,31 @@ import (
 	_ "github.com/jinzhu/gorm/dialects/mysql"
 	"log"
 	"pfencoder/tools"
+	"time"
 )
 
 var DbDsn string
 
+func OpenGormDb() (db *gorm.DB) {
+	for {
+		db, err := gorm.Open("mysql", DbDsn)
+		if err == nil {
+			return db
+		}
+		tools.LogOnError(err, "Failed to connect to the database %s, error=%s, retrying...", DbDsn, err)
+		time.Sleep(3 * time.Second)
+	}
+}
+
+func OpenGormDbOnce() (db *gorm.DB, err error) {
+	db, err = gorm.Open("mysql", DbDsn)
+	if err != nil {
+		tools.LogOnError(err, "Failed to connect to the database %s, error=%s", DbDsn, err)
+	}
+	return
+}
+
+//DEPRECATED
 func OpenDb() (db *sql.DB, err error) {
 	db, err = sql.Open("mysql", DbDsn)
 	if err != nil {
@@ -24,14 +45,7 @@ func OpenDb() (db *sql.DB, err error) {
 	return
 }
 
-func OpenGormDb() (db *gorm.DB, err error) {
-	db, err = gorm.Open("mysql", DbDsn)
-	if err != nil {
-		tools.LogOnError(err, "Cannot open database %s", DbDsn)
-	}
-	return
-}
-
+// DEPRECATED
 func DbSetStatus(db *sql.DB, tableName string, id int, state string) (err error) {
 	if db == nil {
 		err = errors.New("db must not be nil, please set a database connection first")
