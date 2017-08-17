@@ -8,5 +8,5 @@ type Subtitle struct {
 }
 
 func (Subtitle) TableName() string {
-  return "subtitles"
+	return "subtitles"
 }

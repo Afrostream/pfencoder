@@ -10,5 +10,5 @@ type Encoder struct {
 }
 
 func (Encoder) TableName() string {
-  return "encoders"
+	return "encoders"
 }

@@ -11,5 +11,5 @@ type ProfilesParameter struct {
 }
 
 func (ProfilesParameter) TableName() string {
-  return "profilesParameters"
+	return "profilesParameters"
 }

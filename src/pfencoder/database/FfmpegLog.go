@@ -6,5 +6,5 @@ type FfmpegLog struct {
 }
 
 func (FfmpegLog) TableName() string {
-  return "ffmpegLogs"
+	return "ffmpegLogs"
 }
