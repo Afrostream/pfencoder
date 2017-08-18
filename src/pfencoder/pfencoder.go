@@ -50,12 +50,13 @@ func main() {
 
 	initChecks()
 
+	/* create tasks */
 	monitoringTask := createMonitoringTask()
-	monitoringTask.Init()
-	monitoringTask.Start()
-
 	exchangerTask := createExchangerTask()
-	exchangerTask.Init()
+	
+	/* all is ok, start tasks */
+
+	monitoringTask.Start()
 	exchangerTask.Start()
 
 	log.Println("-- pfencoder started, To exit press CTRL+C")
@@ -99,7 +100,7 @@ func initChecks() {
 }
 
 func createMonitoringTask() tasks.MonitoringTask {
-	log.Println("-- createMonitoringTask starting...")
+	log.Println("-- createMonitoringTask calling...")
 	encoderId, err := registerEncoder()
 	if err != nil {
 		msg := "Cannot register encoder in database"
@@ -108,12 +109,13 @@ func createMonitoringTask() tasks.MonitoringTask {
 	}
 	log.Printf("-- Encoder database id is %d", encoderId)
 	monitoringTask := tasks.NewMonitoringTask(encoderId)
-	log.Println("-- createMonitoringTask done successfully")
+	monitoringTask.Init()
+	log.Println("-- createMonitoringTask calling done successfully")
 	return monitoringTask
 }
 
 func createExchangerTask() tasks.ExchangerTask {
-	log.Println("-- createExchangerTask starting...")
+	log.Println("-- createExchangerTask calling...")
 	rabbitmqHost := os.Getenv("RABBITMQ_HOST")
 	rabbitmqUser := os.Getenv("RABBITMQ_USER")
 	rabbitmqPassword := os.Getenv("RABBITMQ_PASSWORD")
@@ -122,7 +124,8 @@ func createExchangerTask() tasks.ExchangerTask {
 		rabbitmqPort, _ = strconv.Atoi(os.Getenv("RABBITMQ_PORT"))
 	}
 	exchangerTask := tasks.NewExchangerTask(rabbitmqHost, rabbitmqPort, rabbitmqUser, rabbitmqPassword)
-	log.Println("-- createExchangerTask done successfully")
+	exchangerTask.Init()
+	log.Println("-- createExchangerTask calling done successfully")
 	return exchangerTask
 }
 
