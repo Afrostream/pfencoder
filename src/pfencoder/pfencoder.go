@@ -7,9 +7,6 @@ import (
 	"os"
 	"runtime"
 	"strconv"
-	/* for testing purpose */
-	//"github.com/jinzhu/gorm"
-	//_ "github.com/jinzhu/gorm/dialects/mysql"
 	"pfencoder/database"
 	"pfencoder/tasks"
 )
@@ -90,12 +87,10 @@ func initGlobals() {
 func initChecks() {
 	log.Println("-- initChecks starting...")
 	//TODO : binaries are functional
-	//database is up
-	db, err := database.OpenGormDbOnce()
-	if err != nil {
-		panic(err)
-	}
+	//database check (blocked until database is started)
+	db := database.OpenGormDb()
 	defer db.Close()
+	//rabbitMQ check (later)
 	log.Println("-- initChecks done successfully")
 }
 
