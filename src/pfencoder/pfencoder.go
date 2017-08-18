@@ -5,10 +5,10 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"log"
 	"os"
-	"runtime"
-	"strconv"
 	"pfencoder/database"
 	"pfencoder/tasks"
+	"runtime"
+	"strconv"
 )
 
 func registerEncoder() (id int, err error) {
@@ -50,7 +50,7 @@ func main() {
 	/* create tasks */
 	monitoringTask := createMonitoringTask()
 	exchangerTask := createExchangerTask()
-	
+
 	/* all is ok, start tasks */
 
 	monitoringTask.Start()
