@@ -7,5 +7,5 @@ type Broadcaster struct {
 }
 
 func (Broadcaster) TableName() string {
-	return "broadcasters"
+	return "broadcaster"
 }
