@@ -364,11 +364,11 @@ func (t *TranscoderTask) StartEncoding() {
 		return
 	}
 	//ProfileParameters Informations
-	profilesParameters := []database.ProfilesParameter{}
+	var profilesParameters []*database.ProfilesParameter
 	db.Where(&database.ProfilesParameter{AssetId: asset.ID}).Find(&profilesParameters)
 	//
 	//AssetsFromSameContent Informations
-	assetsFromSameContent := []database.Asset{}
+	var assetsFromSameContent []*database.Asset
 	db.Where(&database.Asset{ContentId: content.ID}).Find(&assetsFromSameContent)
 	//<-- DATABASE
 	sourceFilename := dependanceAsset.Filename
@@ -491,7 +491,7 @@ func (t *TranscoderTask) generateSubtitles(content database.Content, dir string)
 	log.Printf("-- [ %d ] generateSubtitles...", t.assetId)
 	db := database.OpenGormDb()
 	defer db.Close()
-	subtitles := []database.Subtitle{}
+	var subtitles []*database.Subtitle
 	db.Where(&database.Subtitle{ContentId: content.ID}).Find(&subtitles)
 	rowsEmpty := true
 	for _, subtitle := range subtitles {
@@ -514,9 +514,9 @@ func (t *TranscoderTask) generateSubtitles(content database.Content, dir string)
 func (t *TranscoderTask) generateCommandLine(sourceFilename string,
 	content database.Content,
 	asset database.Asset,
-	assetsFromSameContent []database.Asset,
+	assetsFromSameContent []*database.Asset,
 	preset database.Preset,
-	profilesParameters []database.ProfilesParameter,
+	profilesParameters []*database.ProfilesParameter,
 	subtitlesStr string,
 	subtitlesMap map[string]string) (cmdLine string, err error) {
 	log.Printf("-- [ %d ] generateCommandLine...", t.assetId)
