@@ -330,8 +330,8 @@ func (t *TranscoderTask) StartEncoding() {
 	}
 	//DependanceAsset Informations (SOURCE BIS)
 	var dependanceAsset database.Asset
-	if asset.AssetIdDependance != "" {
-		values := strings.Split(asset.AssetIdDependance, ",")
+	if asset.AssetIdDependance != nil {
+		values := strings.Split(*asset.AssetIdDependance, ",")
 		if len(values) > 0 {
 			//NCO previous code use LEFT JOIN that seems to take 1ST value only, here we try to do the same...
 			dependanceAssetIdStr := values[0]

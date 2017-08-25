@@ -43,7 +43,7 @@ func (e *ExchangerTask) Init() bool {
 	if os.Getenv("TRANSCODING_VERSION") != "" {
 		e.transcodingVersion, _ = strconv.Atoi(os.Getenv("TRANSCODING_VERSION"))
 	}
-	log.Printf("-- ExchangerTask init : transcodingVersion=%d", e.transcodingVersion)
+	log.Printf("-- ExchangerTask init : TRANSCODING_VERSION=%d", e.transcodingVersion)
 	e.initialized = true
 	log.Printf("-- ExchangerTask init done successfully")
 	return e.initialized
