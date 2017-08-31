@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
+	"gopkg.in/natefinch/lumberjack.v2"
+	"io"
 	"log"
 	"os"
 	"pfencoder/database"
@@ -41,6 +43,14 @@ func main() {
 	//log.Println("-- TESTING ZONE PURPOSE DONE SUCCESSULLY")
 	//return
 	/** TESTING ZONE PURPOSE **/
+	log.SetOutput(io.MultiWriter(os.Stdout,
+		&lumberjack.Logger{
+			Filename:   "pfencoder.log",
+			MaxSize:    10,
+			MaxBackups: 5,
+			MaxAge:     180,
+		}))
+
 	log.Println("-- pfencoder starting...")
 
 	initGlobals()

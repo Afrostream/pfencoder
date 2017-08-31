@@ -5,6 +5,6 @@ RUN dpkg -i /tmp/mp4split_1.7.19_ubuntu16_amd64.deb
 COPY src /go/src/
 COPY compile-pfencoder.sh /tmp/
 RUN /tmp/compile-pfencoder.sh
-COPY usp_package_sub.sh /usr/local/bin/
+COPY scripts /usr/local/bin/
 COPY entrypoint.sh /
 CMD ["./entrypoint.sh"]
