@@ -114,7 +114,9 @@ func (t *TranscoderTask) DoEncoding() {
 	}
 
 	var cmdArgs []string
-	cmdLine := strings.Replace(ac.P.CmdLine, "%SOURCE%", *ac.SrcFilename, -1)
+	//FIXME : NCO : for ffmpeg old/new version compatibilty
+	cmdLine := strings.Replace(ac.P.CmdLine, "libfaac", "libfdk_aac", -1)
+	cmdLine = strings.Replace(cmdLine, "%SOURCE%", *ac.SrcFilename, -1)
 	cmdLine = strings.Replace(cmdLine, "%DESTINATION%", *ac.DstFilename, -1)
 	cmdLine = strings.Replace(cmdLine, "%UUID%", *uuid, -1)
 	cmdLine = strings.Replace(cmdLine, "%BASEDIR%", path.Dir(*ac.DstFilename), -1)
@@ -520,7 +522,9 @@ func (t *TranscoderTask) generateCommandLine(sourceFilename string,
 	subtitlesStr string,
 	subtitlesMap map[string]string) (cmdLine string, err error) {
 	log.Printf("-- [ %d ] generateCommandLine...", t.assetId)
-	cmdLine = strings.Replace(preset.CmdLine, "%SOURCE%", sourceFilename, -1)
+	//FIXME : NCO : for ffmpeg old/new version compatibilty
+	cmdLine = strings.Replace(preset.CmdLine, "libfaac", "libfdk_aac", -1)
+	cmdLine = strings.Replace(cmdLine, "%SOURCE%", sourceFilename, -1)
 	cmdLine = strings.Replace(cmdLine, "%DESTINATION%", asset.Filename, -1)
 	cmdLine = strings.Replace(cmdLine, "%UUID%", content.Uuid, -1)
 	cmdLine = strings.Replace(cmdLine, "%BASEDIR%", path.Dir(asset.Filename), -1)
