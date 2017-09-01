@@ -39,7 +39,11 @@ func (e *ExchangerTask) Init() bool {
 	if err != nil {
 		log.Fatal(err)
 	}
-	e.amqpUri = fmt.Sprintf("amqp://%s:%s@%s:%d", e.rabbitmqUser, e.rabbitmqPassword, e.rabbitmqHost, e.rabbitmqPort)
+	if e.rabbitmqUser != "" {
+		e.amqpUri = fmt.Sprintf("amqp://%s:%s@%s:%d", e.rabbitmqUser, e.rabbitmqPassword, e.rabbitmqHost, e.rabbitmqPort)
+	} else {
+		e.amqpUri = fmt.Sprintf("amqp://%s:%d", e.rabbitmqHost, e.rabbitmqPort)
+	}
 	if os.Getenv("TRANSCODING_VERSION") != "" {
 		e.transcodingVersion, _ = strconv.Atoi(os.Getenv("TRANSCODING_VERSION"))
 	}
