@@ -122,7 +122,6 @@ func (t *TranscoderTask) DoEncoding() {
 	cmdLine = strings.Replace(cmdLine, "%BASEDIR%", path.Dir(*ac.DstFilename), -1)
 	cmdLine = strings.Replace(cmdLine, "%SUBTITLES%", subtitlesStr, -1)
 	for k, l := range subtitles {
-		log.Printf("k is %s", k)
 		cmdLine = strings.Replace(cmdLine, "%SUBTITLE_"+strings.ToUpper(k)+"%", l, -1)
 	}
 	var re *regexp.Regexp
@@ -390,7 +389,7 @@ func (t *TranscoderTask) StartEncoding() {
 		t.setAssetState(&asset, "failed")
 		return
 	}
-	log.Printf("[ %d ] StartEncoding : (out) len(subtitlesMap)=%d", t.assetId, len(subtitlesMap)) 
+	log.Printf("-- [ %d ] StartEncoding : (out) len(subtitlesMap)=%d", t.assetId, len(subtitlesMap)) 
 	cmdLine, err := t.generateCommandLine(sourceFilename,
 		content,
 		asset,
@@ -511,7 +510,7 @@ func (t *TranscoderTask) generateSubtitles(content database.Content, dir string)
 	if rowsEmpty == false {
 		subtitlesStr = subtitlesStr[:len(subtitlesStr)-1]
 	}
-	log.Printf("[ %d ] generateSubtitles : (in) len(subtitlesMap)=%d", t.assetId, len(subtitlesMap))
+	log.Printf("-- [ %d ] generateSubtitles : (in) len(subtitlesMap)=%d", t.assetId, len(subtitlesMap))
 	log.Printf("-- [ %d ] generateSubtitles done successfully, subtitlesStr=%s", t.assetId, subtitlesStr)
 	return
 }

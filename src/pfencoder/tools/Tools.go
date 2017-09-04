@@ -14,7 +14,7 @@ func LogOnError(err error, format string, v ...interface{}) {
 
 func Before(value string, a string) string {
     // Get substring before a string.
-    pos := strings.Index(value, a)
+    pos := strings.LastIndex(value, a)
     if pos == -1 {
         return ""
     }
