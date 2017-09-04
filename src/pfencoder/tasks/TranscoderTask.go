@@ -390,6 +390,7 @@ func (t *TranscoderTask) StartEncoding() {
 		t.setAssetState(&asset, "failed")
 		return
 	}
+	log.Printf("[ %d ] StartEncoding : (out) len(subtitlesMap)=%d", len(subtitlesMap)) 
 	cmdLine, err := t.generateCommandLine(sourceFilename,
 		content,
 		asset,
@@ -491,6 +492,7 @@ func (t *TranscoderTask) addFfmpegLog(msg string) (ffmpegLog database.FfmpegLog,
 
 func (t *TranscoderTask) generateSubtitles(content database.Content, dir string) (subtitlesStr string, subtitlesMap map[string]string, err error) {
 	log.Printf("-- [ %d ] generateSubtitles...", t.assetId)
+	subtitlesMap = make(map[string]string)
 	db := database.OpenGormDb()
 	defer db.Close()
 	var subtitles []*database.Subtitle
@@ -509,6 +511,7 @@ func (t *TranscoderTask) generateSubtitles(content database.Content, dir string)
 	if rowsEmpty == false {
 		subtitlesStr = subtitlesStr[:len(subtitlesStr)-1]
 	}
+	log.Printf("[ %d ] generateSubtitles : (in) len(subtitlesMap)=%d", len(subtitlesMap))
 	log.Printf("-- [ %d ] generateSubtitles done successfully, subtitlesStr=%s", t.assetId, subtitlesStr)
 	return
 }
