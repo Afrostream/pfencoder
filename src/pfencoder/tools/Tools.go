@@ -18,5 +18,5 @@ func After(value string, a string) string {
     if pos == -1 {
         return ""
     }
-    return value[pos:len(value)]
+    return value[(pos + 1):len(value)]
 }
