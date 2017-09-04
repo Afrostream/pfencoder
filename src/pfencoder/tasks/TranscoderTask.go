@@ -501,7 +501,7 @@ func (t *TranscoderTask) generateSubtitles(content database.Content, dir string)
 		lang := subtitle.Lang
 		rowUrl := subtitle.Url
 		// NCO : emulate : lang, SUBSTRING_INDEX(url, '/', -1) AS vtt
-		vtt := tools.Before(rowUrl, "/")
+		vtt := tools.After(rowUrl, "/")
 		subtitlesMap[lang] = encodedBasePath + "/origin/vod/" + path.Base(dir) + "/" + strings.Replace(vtt, " ", "_", -1)
 		subtitlesStr += strings.Replace(vtt, " ", "_", -1) + "%" + lang + " "
 		rowsEmpty = false

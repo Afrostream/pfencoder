@@ -12,11 +12,11 @@ func LogOnError(err error, format string, v ...interface{}) {
 	}
 }
 
-func Before(value string, a string) string {
+func After(value string, a string) string {
     // Get substring before a string.
     pos := strings.LastIndex(value, a)
     if pos == -1 {
         return ""
     }
-    return value[0:pos]
+    return value[pos:len(value)]
 }
