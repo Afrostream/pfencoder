@@ -390,7 +390,7 @@ func (t *TranscoderTask) StartEncoding() {
 		t.setAssetState(&asset, "failed")
 		return
 	}
-	log.Printf("[ %d ] StartEncoding : (out) len(subtitlesMap)=%d", len(subtitlesMap)) 
+	log.Printf("[ %d ] StartEncoding : (out) len(subtitlesMap)=%d", t.assetId, len(subtitlesMap)) 
 	cmdLine, err := t.generateCommandLine(sourceFilename,
 		content,
 		asset,
@@ -511,7 +511,7 @@ func (t *TranscoderTask) generateSubtitles(content database.Content, dir string)
 	if rowsEmpty == false {
 		subtitlesStr = subtitlesStr[:len(subtitlesStr)-1]
 	}
-	log.Printf("[ %d ] generateSubtitles : (in) len(subtitlesMap)=%d", len(subtitlesMap))
+	log.Printf("[ %d ] generateSubtitles : (in) len(subtitlesMap)=%d", t.assetId, len(subtitlesMap))
 	log.Printf("-- [ %d ] generateSubtitles done successfully, subtitlesStr=%s", t.assetId, subtitlesStr)
 	return
 }
