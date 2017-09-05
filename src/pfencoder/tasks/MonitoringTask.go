@@ -36,7 +36,7 @@ func (m *MonitoringTask) Start() {
 		return
 	}
 	log.Printf("-- MonitoringTask Thread starting...")
-	ticker := time.NewTicker(time.Second * 5)
+	ticker := time.NewTicker(time.Second * 1)
 	go func() {
 		log.Printf("-- MonitoringTask Thread started")
 		for _ = range ticker.C {
@@ -48,13 +48,13 @@ func (m *MonitoringTask) Start() {
 			}
 			//log.Printf("-- MonitoringTask Thread ticker, load1=%f", load1)
 			db := database.OpenGormDb()
-			encoder := database.Encoder{ID: m.instanceId}
-			if db.Where(&encoder).First(&encoder).RecordNotFound() {
+			var encoder database.Encoder
+			if db.Where(database.Encoder{ID: m.instanceId}).First(&encoder).RecordNotFound() {
 				log.Printf("MonitoringTask : Cannot find encoder in database with ID=%d", m.instanceId)
 				continue
 			}
 			encoder.Load1 = load1
-			encoder.ActiveTasks = ffmpegProcesses
+			encoder.ActiveTasks = activeTasks
 			db.Save(&encoder)
 			db.Close()
 			//log.Printf("-- MonitoringTask Thread ticker done successfully")

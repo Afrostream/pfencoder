@@ -25,8 +25,8 @@ func registerEncoder() (id int, err error) {
 		panic(err)
 	}
 	defer db.Close()
-	encoder := database.Encoder{Hostname: hostname}
-	db.Where(&encoder).FirstOrCreate(&encoder)
+	var encoder database.Encoder
+	db.Where(database.Encoder{Hostname: hostname}).FirstOrCreate(&encoder)
 	//RESET activeTasks, load1 (encoder is starting !)
 	encoder.ActiveTasks = 0
 	encoder.Load1 = 0

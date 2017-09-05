@@ -160,21 +160,16 @@ func (e *ExchangerTask) Start() {
 					var oMessage OrderMessage
 					err = json.Unmarshal([]byte(msg.Body), &oMessage)
 					if oMessage.Hostname == e.hostname {
-						//TODO : NCO : Why this limit, what happens if task is not taken ?
-						if ffmpegProcesses < 4 {
-							log.Printf("-- ExchangerTask : TranscoderTask creating...")
-							transcoderTask := NewTranscoderTask(oMessage.AssetId)
-							transcoderTask.Init()
-							log.Printf("-- ExchangerTask : TranscoderTask inited, starting Encoding, transcodingVersion=%d", e.transcodingVersion)
-							if e.transcodingVersion == 1 {
-								go transcoderTask.StartEncoding()
-							} else {
-								go transcoderTask.DoEncoding()
-							}
-							log.Printf("-- ExchangerTask : TranscoderTask creating done successfully")
+						log.Printf("-- ExchangerTask : TranscoderTask creating...")
+						transcoderTask := NewTranscoderTask(oMessage.AssetId)
+						transcoderTask.Init()
+						log.Printf("-- ExchangerTask : TranscoderTask inited, starting Encoding, transcodingVersion=%d", e.transcodingVersion)
+						if e.transcodingVersion == 1 {
+							go transcoderTask.StartEncoding()
 						} else {
-							log.Printf("ExchangerTask : Cannot start one more ffmpeg process (encoding queue full)")
+							go transcoderTask.DoEncoding()
 						}
+						log.Printf("-- ExchangerTask : TranscoderTask creating done successfully")
 					} else {
 						log.Printf("-- ExchangerTask : message ignored : hostame=%s, message.hostname=%s", e.hostname, oMessage.Hostname)
 					}

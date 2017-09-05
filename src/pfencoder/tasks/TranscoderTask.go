@@ -14,9 +14,10 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 )
 
-var ffmpegProcesses = 0
+var activeTasks int64
 
 var ffmpegPath = os.Getenv("FFMPEG_PATH")
 var spumuxPath = os.Getenv("SPUMUX_PATH")
@@ -44,6 +45,8 @@ func (t *TranscoderTask) Init() bool {
 }
 
 func (t *TranscoderTask) DoEncoding() {
+	atomic.AddInt64(&activeTasks, 1)
+	defer atomic.AddInt64(&activeTasks, -1)
 	log.Printf("-- [ %d ] Encoding task received", t.assetId)
 	log.Printf("-- [ %d ] Get asset encoding configuration from database", t.assetId)
 	db, _ := database.OpenDb()
@@ -203,7 +206,6 @@ func (t *TranscoderTask) DoEncoding() {
 		log.Printf("-- [ %d ] Cannot start command %s %s: %s", t.assetId, binaryPath, strings.Join(cmdArgs, " "), err)
 		return
 	}
-	ffmpegProcesses++
 	database.DbSetAssetStatus(db, t.assetId, "processing")
 
 	fullLog := ""
@@ -230,7 +232,6 @@ func (t *TranscoderTask) DoEncoding() {
 			database.DbSetFFmpegLog(db, t.assetId, s)
 			log.Printf("XX [ %d ] FFMpeg execution error, please consult logs in database table 'logs'", t.assetId)
 			cmd.Wait()
-			ffmpegProcesses--
 			return
 		}
 
@@ -289,7 +290,6 @@ func (t *TranscoderTask) DoEncoding() {
 			t.updateAssetsStreams()
 		}
 	}
-	ffmpegProcesses--
 	database.DbSetFFmpegLog(db, t.assetId, fullLog)
 	log.Printf("-- [ %d ] FFmpeg execution success", t.assetId)
 
@@ -302,7 +302,7 @@ func (t *TranscoderTask) updateAssetsStreams() {
 	url := fmt.Sprintf("%s/api/assetsStreams/%d", pfSchedulerUrl, t.assetId)
 	_, err := http.Post(url, "application/json", strings.NewReader("{}"))
 	if err != nil {
-		log.Printf("[%d] updateAssetsStreams : Cannot update assetsStreams with url %s: %s", t.assetId, url, err)
+		log.Printf("[%d] updateAssetsStreams : cannot update assetsStreams with url %s: %s", t.assetId, url, err)
 		return
 	}
 	log.Printf("-- [ %d ] updateAssetsStreams done successfully", t.assetId)
@@ -310,22 +310,25 @@ func (t *TranscoderTask) updateAssetsStreams() {
 }
 
 func (t *TranscoderTask) StartEncoding() {
+	atomic.AddInt64(&activeTasks, 1)
+	defer atomic.AddInt64(&activeTasks, -1)
+	//
 	log.Printf("-- [ %d ] StartEncoding...", t.assetId)
 	//DATABASE -->
 	db := database.OpenGormDb()
 	defer db.Close()
 	//Asset Informations (RESULT)
-	asset := database.Asset{ID: t.assetId}
-	if db.Where(&asset).First(&asset).RecordNotFound() {
-		log.Printf("[ %d ] StartEncoding : Cannot find asset with ID=%d", t.assetId, t.assetId)
+	var asset database.Asset
+	if db.Where(database.Asset{ID: t.assetId}).First(&asset).RecordNotFound() {
+		log.Printf("[ %d ] StartEncoding : cannot find asset with ID=%d", t.assetId, t.assetId)
 		t.setAssetState(&asset, "failed")
 		return
 	}
 	t.setAssetState(&asset, "processing")
 	//Content Informations (SOURCE)
-	content := database.Content{ID: asset.ContentId}
-	if db.Where(&content).First(&content).RecordNotFound() {
-		log.Printf("[ %d ] StartEncoding : Cannot find content with ID=%d", t.assetId, asset.ContentId)
+	var content database.Content
+	if db.Where(database.Content{ID: asset.ContentId}).First(&content).RecordNotFound() {
+		log.Printf("[ %d ] StartEncoding : cannot find content with ID=%d", t.assetId, asset.ContentId)
 		t.setAssetState(&asset, "failed")
 		return
 	}
@@ -338,39 +341,39 @@ func (t *TranscoderTask) StartEncoding() {
 			dependanceAssetIdStr := values[0]
 			dependanceAssetId, err := strconv.Atoi(dependanceAssetIdStr)
 			if err != nil {
-				log.Printf("[ %d ] StartEncoding : Cannot convert AssetIdDependance=%s, error=%s", t.assetId, dependanceAssetIdStr, err)
+				log.Printf("[ %d ] StartEncoding : cannot convert AssetIdDependance=%s, error=%s", t.assetId, dependanceAssetIdStr, err)
 				t.setAssetState(&asset, "failed")
 				return
 			}
-			dependanceAsset = database.Asset{ID: dependanceAssetId}
-			if db.Where(&dependanceAsset).First(&dependanceAsset).RecordNotFound() {
-				log.Printf("[ %d ] StartEncoding : Cannot find dependanceAsset with ID=%d", t.assetId, dependanceAssetId)
+			var dependanceAsset database.Asset
+			if db.Where(database.Asset{ID: dependanceAssetId}).First(&dependanceAsset).RecordNotFound() {
+				log.Printf("[ %d ] StartEncoding : cannot find dependanceAsset with ID=%d", t.assetId, dependanceAssetId)
 				t.setAssetState(&asset, "failed")
 				return
 			}
+			log.Printf("-- [ %d ] StartEncoding : using dependanceAsset with ID=%d", t.assetId, dependanceAsset.ID)
 		} else {
-			log.Printf("[ %d ] StartEncoding : Cannot split AssetIdDependance=%s", t.assetId, asset.AssetIdDependance)
+			log.Printf("[ %d ] StartEncoding : cannot split AssetIdDependance=%s", t.assetId, asset.AssetIdDependance)
 			t.setAssetState(&asset, "failed")
 			return
 		}
-		log.Printf("-- [ %d ] StartEncoding : Using dependanceAsset with ID=%d", t.assetId, dependanceAsset.ID)
 	} else {
 		log.Printf("-- [ %d ] StartEncoding : no AssetIdDependance set", t.assetId)
 	}
 	//Preset Informations
-	preset := database.Preset{ID: asset.PresetId}
-	if db.Where(&preset).First(&preset).RecordNotFound() {
-		log.Printf("[ %d ] StartEncoding : Cannot find preset with ID=%d", t.assetId, asset.PresetId)
+	var preset database.Preset
+	if db.Where(database.Preset{ID: asset.PresetId}).First(&preset).RecordNotFound() {
+		log.Printf("[ %d ] StartEncoding : cannot find preset with ID=%d", t.assetId, asset.PresetId)
 		t.setAssetState(&asset, "failed")
 		return
 	}
 	//ProfileParameters Informations
 	var profilesParameters []*database.ProfilesParameter
-	db.Where(&database.ProfilesParameter{AssetId: asset.ID}).Find(&profilesParameters)
+	db.Where(database.ProfilesParameter{AssetId: asset.ID}).Find(&profilesParameters)
 	//
 	//AssetsFromSameContent Informations
 	var assetsFromSameContent []*database.Asset
-	db.Where(&database.Asset{ContentId: content.ID}).Find(&assetsFromSameContent)
+	db.Where(database.Asset{ContentId: content.ID}).Find(&assetsFromSameContent)
 	//<-- DATABASE
 	sourceFilename := dependanceAsset.Filename
 	if sourceFilename == "" {
@@ -379,17 +382,17 @@ func (t *TranscoderTask) StartEncoding() {
 	dir := path.Dir(asset.Filename)
 	err := os.MkdirAll(dir, 0755)
 	if err != nil {
-		log.Printf("[ %d ] StartEncoding : Cannot create directory %s, error=%s", t.assetId, dir, err)
+		log.Printf("[ %d ] StartEncoding : cannot create directory %s, error=%s", t.assetId, dir, err)
 		t.setAssetState(&asset, "failed")
 		return
 	}
 	subtitlesStr, subtitlesMap, err := t.generateSubtitles(content, dir)
 	if err != nil {
-		log.Printf("[ %d ] StartEncoding : Cannot generate subtitles, error=%s", t.assetId, err)
+		log.Printf("[ %d ] StartEncoding : cannot generate subtitles, error=%s", t.assetId, err)
 		t.setAssetState(&asset, "failed")
 		return
 	}
-	log.Printf("-- [ %d ] StartEncoding : (out) len(subtitlesMap)=%d", t.assetId, len(subtitlesMap)) 
+	log.Printf("-- [ %d ] StartEncoding : (out) len(subtitlesMap)=%d", t.assetId, len(subtitlesMap))
 	cmdLine, err := t.generateCommandLine(sourceFilename,
 		content,
 		asset,
@@ -432,14 +435,12 @@ func (t *TranscoderTask) setContentState(content *database.Content, state string
 	db.Save(content)
 }
 
-
 func (t *TranscoderTask) setFfmpegProgress(v []string) (ffmpegProgress database.FfmpegProgress, err error) {
 	db := database.OpenGormDb()
 	defer db.Close()
 	/* NCO : Cannot use "primary_key because there's no one...*/
-	ffmpegProgress = database.FfmpegProgress{AssetId: t.assetId}
 	//GET
-	if db.Where(&ffmpegProgress).First(&ffmpegProgress).RecordNotFound() {
+	if db.Where(database.FfmpegProgress{AssetId: t.assetId}).First(&ffmpegProgress).RecordNotFound() {
 		//CREATE
 		db.Create(&ffmpegProgress)
 	}
@@ -495,7 +496,7 @@ func (t *TranscoderTask) generateSubtitles(content database.Content, dir string)
 	db := database.OpenGormDb()
 	defer db.Close()
 	var subtitles []*database.Subtitle
-	db.Where(&database.Subtitle{ContentId: content.ID}).Find(&subtitles)
+	db.Where(database.Subtitle{ContentId: content.ID}).Find(&subtitles)
 	rowsEmpty := true
 	for _, subtitle := range subtitles {
 		lang := subtitle.Lang
@@ -532,7 +533,6 @@ func (t *TranscoderTask) generateCommandLine(sourceFilename string,
 	cmdLine = strings.Replace(cmdLine, "%BASEDIR%", path.Dir(asset.Filename), -1)
 	cmdLine = strings.Replace(cmdLine, "%SUBTITLES%", subtitlesStr, -1)
 	for k, l := range subtitlesMap {
-		log.Printf("k is %s", k)
 		cmdLine = strings.Replace(cmdLine, "%SUBTITLE_"+strings.ToUpper(k)+"%", l, -1)
 	}
 	re, err := regexp.Compile("%SOURCE_[0-9]+%")
@@ -612,8 +612,7 @@ func (t *TranscoderTask) executeCommand(Type string, cmdLine string) (generalErr
 		log.Printf("-- [ %d ] executeCommand : command starting failed : %s %s: %s", t.assetId, binaryPath, strings.Join(cmdArgs, " "), generalErr)
 		return
 	}
-	ffmpegProcesses++
-
+	
 	fullLog := ""
 	switch Type {
 	case "ffmpeg":
@@ -638,7 +637,6 @@ func (t *TranscoderTask) executeCommand(Type string, cmdLine string) (generalErr
 			log.Printf("[ %d ] "+msg, t.assetId)
 			generalErr = errors.New(msg)
 			cmd.Wait()
-			ffmpegProcesses--
 			return
 		}
 		re, err := regexp.Compile(`frame= *([0-9]*) *fps= *([0-9]*) *q= *([-0-9\.]*)* *L?size= *([0-9]*)kB *time= *([0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{2}) *bitrate= *([0-9\.]*)kbits/s`)
@@ -683,7 +681,6 @@ func (t *TranscoderTask) executeCommand(Type string, cmdLine string) (generalErr
 		}
 	}
 	generalErr = cmd.Wait()
-	ffmpegProcesses--
 	t.addFfmpegLog(fullLog)
 	log.Printf("-- [ %d ] executeCommand done successfully", t.assetId)
 	return
