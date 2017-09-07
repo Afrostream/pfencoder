@@ -483,7 +483,7 @@ func (t *TranscoderTask) setFfmpegProgress(v []string) (ffmpegProgress database.
 func (t *TranscoderTask) addFfmpegLog(msg string) (ffmpegLog database.FfmpegLog, err error) {
 	log.Printf("-- [ %d ] addFfmpegLog...", t.assetId)
 	db := database.OpenGormDb()
-	db.Close()
+	defer db.Close()
 	ffmpegLog = database.FfmpegLog{AssetId: t.assetId, Log: msg}
 	db.Create(&ffmpegLog)
 	log.Printf("-- [ %d ] addFfmpegLog done successfully", t.assetId)

@@ -40,24 +40,26 @@ func (m *MonitoringTask) Start() {
 	go func() {
 		log.Printf("-- MonitoringTask Thread started")
 		for _ = range ticker.C {
-			//log.Printf("-- MonitoringTask Thread ticker...")
-			load1, err := m.load1()
-			if err != nil {
-				log.Printf("MonitoringTask : Cannot parse load1 as float32, error=%s", err)
-				continue
-			}
-			//log.Printf("-- MonitoringTask Thread ticker, load1=%f", load1)
-			db := database.OpenGormDb()
-			var encoder database.Encoder
-			if db.Where(database.Encoder{ID: m.instanceId}).First(&encoder).RecordNotFound() {
-				log.Printf("MonitoringTask : Cannot find encoder in database with ID=%d", m.instanceId)
-				continue
-			}
-			encoder.Load1 = load1
-			encoder.ActiveTasks = activeTasks
-			db.Save(&encoder)
-			db.Close()
-			//log.Printf("-- MonitoringTask Thread ticker done successfully")
+			func() {
+				//log.Printf("-- MonitoringTask Thread ticker...")
+				load1, err := m.load1()
+				if err != nil {
+					log.Printf("MonitoringTask : cannot parse load1 as float32, error=%s", err)
+					return
+				}
+				//log.Printf("-- MonitoringTask Thread ticker, load1=%f", load1)
+				db := database.OpenGormDb()
+				defer db.Close()
+				var encoder database.Encoder
+				if db.Where(database.Encoder{ID: m.instanceId}).First(&encoder).RecordNotFound() {
+					log.Printf("MonitoringTask : cannot find encoder in database with ID=%d", m.instanceId)
+					return
+				}
+				encoder.Load1 = load1
+				encoder.ActiveTasks = activeTasks
+				db.Save(&encoder)
+				//log.Printf("-- MonitoringTask Thread ticker done successfully")
+			}()
 		}
 		log.Printf("MonitoringTask Thread stopped")
 	}()
@@ -66,13 +68,13 @@ func (m *MonitoringTask) Start() {
 func (m *MonitoringTask) load1WithInputToCompile(input string) (load1 float32, err error) {
 	s, err := exec.Command(m.uptimePath).Output()
 	if err != nil {
-		log.Printf("MonitoringTask : Cannot exec cmd %s: %s", m.uptimePath, err)
+		log.Printf("MonitoringTask : cannot exec cmd %s: %s", m.uptimePath, err)
 		return
 	}
 	//log.Printf("Uptime output=%s", string(s))
 	re, err := regexp.Compile(input)
 	if err != nil {
-		log.Printf("MonitoringTask : Cannot compile regexp: %s", err)
+		log.Printf("MonitoringTask : cannot compile regexp: %s", err)
 		return
 	}
 	matches := re.FindAllStringSubmatch(string(s), -1)

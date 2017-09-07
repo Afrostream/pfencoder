@@ -1,12 +1,16 @@
 package database
 
+import (
+	"time"
+)
+
 type Encoder struct {
-	ID          int     `gorm:"primary_key;column:encoderId"`
-	Hostname    string  `gorm:"column:hostname"`
-	ActiveTasks int64   `gorm:"column:activeTasks;default:0"`
-	MaxTasks    int64   `gorm:"column:maxTasks;default:1"`
-	Load1       float32 `gorm:"column:load1;default:1"`
-	UpdatedAt   string  `gorm:"column:updatedAt;default:CURRENT_TIMESTAMP"`
+	ID          int       `gorm:"primary_key;column:encoderId"`
+	Hostname    string    `gorm:"column:hostname"`
+	ActiveTasks int64     `gorm:"column:activeTasks;default:0"`
+	MaxTasks    int64     `gorm:"column:maxTasks;default:1"`
+	Load1       float32   `gorm:"column:load1;default:0"`
+	UpdatedAt   time.Time `gorm:"column:updatedAt" sql:"DEFAULT:CURRENT_TIMESTAMP"`
 }
 
 func (Encoder) TableName() string {

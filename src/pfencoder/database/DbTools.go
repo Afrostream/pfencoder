@@ -36,7 +36,7 @@ func OpenGormDbOnce() (db *gorm.DB, err error) {
 
 //DEPRECATED
 func OpenDb() (db *sql.DB, err error) {
-	db, err = sql.Open("mysql", DbDsn)
+	db, err = sql.Open("mysql", DbDsn + "?parseTime=true")
 	if err != nil {
 		tools.LogOnError(err, "Cannot open database %s", DbDsn)
 	}
